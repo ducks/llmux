@@ -32,9 +32,9 @@ mod errors;
 mod filters;
 
 pub use conditionals::{evaluate_condition, evaluate_expression, should_execute_step};
-pub use context::{value_as_bool, TemplateContext};
+pub use context::{TemplateContext, value_as_bool};
 pub use engine::TemplateEngine;
-pub use errors::{suggest_correction, SourceLocation, TemplateError};
+pub use errors::{SourceLocation, TemplateError, suggest_correction};
 
 #[cfg(test)]
 mod tests {
@@ -60,34 +60,27 @@ mod tests {
         ctx.add_step("fetch", fetch_result);
 
         // Render prompt for second step
-        let prompt = engine.render(
-            "Based on issue #{{ args.issue }}:\n{{ steps.fetch.output }}\n\nPropose a fix.",
-            &ctx,
-        ).unwrap();
+        let prompt = engine
+            .render(
+                "Based on issue #{{ args.issue }}:\n{{ steps.fetch.output }}\n\nPropose a fix.",
+                &ctx,
+            )
+            .unwrap();
 
         assert!(prompt.contains("issue #123"));
         assert!(prompt.contains("Bug fix"));
 
         // Simulate second step completing
-        let analyze_result = StepResult::success(
-            "Apply fix to src/main.rs".into(),
-            "claude".into(),
-            5000,
-        );
+        let analyze_result =
+            StepResult::success("Apply fix to src/main.rs".into(), "claude".into(), 5000);
         ctx.add_step("analyze", analyze_result);
 
         // Check condition for third step
-        let should_run = should_execute_step(
-            Some("steps.analyze.failed == false"),
-            &ctx,
-        ).unwrap();
+        let should_run = should_execute_step(Some("steps.analyze.failed == false"), &ctx).unwrap();
         assert!(should_run);
 
         // Check condition that should skip
-        let should_skip = should_execute_step(
-            Some("steps.analyze.failed == true"),
-            &ctx,
-        ).unwrap();
+        let should_skip = should_execute_step(Some("steps.analyze.failed == true"), &ctx).unwrap();
         assert!(!should_skip);
     }
 
@@ -139,7 +132,9 @@ mod tests {
         assert!(dangerous.contains("$(rm"));
 
         // With shell_escape - safe
-        let safe = engine.render("echo {{ args.user_input | shell_escape }}", &ctx).unwrap();
+        let safe = engine
+            .render("echo {{ args.user_input | shell_escape }}", &ctx)
+            .unwrap();
         assert!(safe.contains("'$(rm"));
         assert!(safe.contains(")'"));
     }

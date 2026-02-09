@@ -103,7 +103,11 @@ impl Object for ContextObject {
         match key_str {
             "steps" => Some(Value::from_object(StepsObject(self.0.steps.clone()))),
             "args" => Some(Value::from_object(ArgsObject(self.0.args.clone()))),
-            "team" => self.0.team.as_ref().map(|t| Value::from_object(TeamObject(t.clone()))),
+            "team" => self
+                .0
+                .team
+                .as_ref()
+                .map(|t| Value::from_object(TeamObject(t.clone()))),
             "item" => self.0.item.clone(),
             "workflow" => self.0.workflow.as_ref().map(|w| Value::from(w.clone())),
             "env" => Some(Value::from_object(EnvObject)),

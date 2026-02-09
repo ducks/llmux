@@ -166,10 +166,10 @@ impl LlmuxConfig {
 
     /// Load configuration from a specific file
     pub fn load_file(path: &Path) -> Result<Self> {
-        let contents = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        let config: Self = toml::from_str(&contents)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let contents =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let config: Self =
+            toml::from_str(&contents).with_context(|| format!("parsing {}", path.display()))?;
         Ok(config)
     }
 
@@ -263,10 +263,10 @@ pub fn load_workflow(name: &str, project_dir: Option<&Path>) -> Result<WorkflowC
 }
 
 fn load_workflow_file(path: &Path) -> Result<WorkflowConfig> {
-    let contents = std::fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    let workflow: WorkflowConfig = toml::from_str(&contents)
-        .with_context(|| format!("parsing {}", path.display()))?;
+    let contents =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let workflow: WorkflowConfig =
+        toml::from_str(&contents).with_context(|| format!("parsing {}", path.display()))?;
 
     // Validate the workflow
     workflow.validate().map_err(|errors| {

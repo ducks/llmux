@@ -109,10 +109,8 @@ impl BackendExecutor for CliBackend {
         let mut cmd = self.build_command(request);
 
         // Spawn the process
-        let mut child = cmd.spawn().map_err(|e| {
-            BackendError::Unavailable {
-                message: format!("failed to spawn '{}': {}", self.command, e),
-            }
+        let mut child = cmd.spawn().map_err(|e| BackendError::Unavailable {
+            message: format!("failed to spawn '{}': {}", self.command, e),
         })?;
 
         // Set up output capture

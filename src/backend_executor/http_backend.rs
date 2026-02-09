@@ -194,10 +194,7 @@ impl BackendExecutor for HttpBackend {
         };
 
         // Build HTTP request
-        let mut http_request = self
-            .client
-            .post(self.chat_completion_url())
-            .json(&body);
+        let mut http_request = self.client.post(self.chat_completion_url()).json(&body);
 
         // Add auth header if we have an API key
         if let Some(ref key) = self.api_key {
@@ -215,9 +212,10 @@ impl BackendExecutor for HttpBackend {
                 let status = response.status();
 
                 if status.is_success() {
-                    let completion: ChatCompletionResponse = response.json().await.map_err(|e| {
-                        BackendError::parse(format!("failed to parse response: {}", e))
-                    })?;
+                    let completion: ChatCompletionResponse =
+                        response.json().await.map_err(|e| {
+                            BackendError::parse(format!("failed to parse response: {}", e))
+                        })?;
 
                     let text = completion
                         .choices

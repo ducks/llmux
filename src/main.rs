@@ -2,6 +2,7 @@ mod backend_executor;
 mod config;
 mod role;
 mod template;
+mod workflow;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -122,18 +123,16 @@ async fn main() -> Result<()> {
             println!("(workflow listing not yet implemented)");
         }
 
-        Commands::Validate { workflow } => {
-            match config::load_workflow(&workflow, project_dir) {
-                Ok(wf) => {
-                    println!("✓ Workflow '{}' is valid", wf.name);
-                    println!("  {} steps", wf.steps.len());
-                }
-                Err(e) => {
-                    eprintln!("✗ Workflow validation failed:\n{}", e);
-                    std::process::exit(1);
-                }
+        Commands::Validate { workflow } => match config::load_workflow(&workflow, project_dir) {
+            Ok(wf) => {
+                println!("✓ Workflow '{}' is valid", wf.name);
+                println!("  {} steps", wf.steps.len());
             }
-        }
+            Err(e) => {
+                eprintln!("✗ Workflow validation failed:\n{}", e);
+                std::process::exit(1);
+            }
+        },
 
         Commands::Run { workflow, args } => {
             let _wf = config::load_workflow(&workflow, project_dir)?;

@@ -47,30 +47,31 @@ impl TemplateEngine {
     pub fn render(&self, template: &str, ctx: &TemplateContext) -> Result<String, TemplateError> {
         // Add the template to the environment
         let mut env = self.env.clone();
-        env.add_template("__render__", template).map_err(|e| {
-            TemplateError::syntax(e.to_string(), e.line().unwrap_or(0), 0)
-        })?;
+        env.add_template("__render__", template)
+            .map_err(|e| TemplateError::syntax(e.to_string(), e.line().unwrap_or(0), 0))?;
 
-        let tmpl = env.get_template("__render__").map_err(|e| {
-            TemplateError::Internal(e)
-        })?;
+        let tmpl = env
+            .get_template("__render__")
+            .map_err(|e| TemplateError::Internal(e))?;
 
-        tmpl.render(ctx.to_value()).map_err(|e| {
-            convert_minijinja_error(e, ctx)
-        })
+        tmpl.render(ctx.to_value())
+            .map_err(|e| convert_minijinja_error(e, ctx))
     }
 
     /// Render a template and return the result trimmed
-    pub fn render_trimmed(&self, template: &str, ctx: &TemplateContext) -> Result<String, TemplateError> {
+    pub fn render_trimmed(
+        &self,
+        template: &str,
+        ctx: &TemplateContext,
+    ) -> Result<String, TemplateError> {
         self.render(template, ctx).map(|s| s.trim().to_string())
     }
 
     /// Check if a template is syntactically valid
     pub fn validate(&self, template: &str) -> Result<(), TemplateError> {
         let mut env = self.env.clone();
-        env.add_template("__validate__", template).map_err(|e| {
-            TemplateError::syntax(e.to_string(), e.line().unwrap_or(0), 0)
-        })?;
+        env.add_template("__validate__", template)
+            .map_err(|e| TemplateError::syntax(e.to_string(), e.line().unwrap_or(0), 0))?;
         Ok(())
     }
 }
@@ -84,12 +85,7 @@ fn convert_minijinja_error(err: minijinja::Error, ctx: &TemplateContext) -> Temp
     if msg.contains("undefined") {
         // Try to extract the variable name
         let var_name = extract_var_from_error(&msg);
-        return TemplateError::undefined_variable_at(
-            var_name,
-            line,
-            0,
-            &ctx.known_variables(),
-        );
+        return TemplateError::undefined_variable_at(var_name, line, 0, &ctx.known_variables());
     }
 
     // Check for type errors
@@ -149,7 +145,9 @@ mod tests {
         let result = StepResult::success("step output".into(), "claude".into(), 1000);
         ctx.add_step("fetch", result);
 
-        let rendered = engine.render("Output: {{ steps.fetch.output }}", &ctx).unwrap();
+        let rendered = engine
+            .render("Output: {{ steps.fetch.output }}", &ctx)
+            .unwrap();
         assert_eq!(rendered, "Output: step output");
     }
 
@@ -255,7 +253,9 @@ mod tests {
         let mut ctx = TemplateContext::new();
         ctx.args.insert("input".into(), "hello world".into());
 
-        let result = engine.render("{{ args.input | shell_escape }}", &ctx).unwrap();
+        let result = engine
+            .render("{{ args.input | shell_escape }}", &ctx)
+            .unwrap();
         assert_eq!(result, "'hello world'");
     }
 
@@ -264,11 +264,15 @@ mod tests {
         let engine = TemplateEngine::new();
         let mut ctx = TemplateContext::new();
         let mut result = StepResult::default();
-        result.outputs.insert("claude".into(), "Claude output".into());
+        result
+            .outputs
+            .insert("claude".into(), "Claude output".into());
         result.outputs.insert("codex".into(), "Codex output".into());
         ctx.add_step("parallel", result);
 
-        let rendered = engine.render("{{ steps.parallel.outputs.claude }}", &ctx).unwrap();
+        let rendered = engine
+            .render("{{ steps.parallel.outputs.claude }}", &ctx)
+            .unwrap();
         assert_eq!(rendered, "Claude output");
     }
 }

@@ -30,9 +30,9 @@ pub fn evaluate_condition(expr: &str, ctx: &TemplateContext) -> Result<bool, Tem
     env.add_template("expr", &template_str)
         .map_err(|e| TemplateError::expression(format!("invalid expression syntax: {}", e)))?;
 
-    let template = env.get_template("expr").map_err(|e| {
-        TemplateError::expression(format!("failed to get template: {}", e))
-    })?;
+    let template = env
+        .get_template("expr")
+        .map_err(|e| TemplateError::expression(format!("failed to get template: {}", e)))?;
 
     let result = template.render(ctx.to_value()).map_err(|e| {
         // Try to provide helpful error messages
@@ -66,13 +66,13 @@ pub fn evaluate_expression(expr: &str, ctx: &TemplateContext) -> Result<Value, T
     env.add_template("expr", &template_str)
         .map_err(|e| TemplateError::expression(format!("invalid expression: {}", e)))?;
 
-    let template = env.get_template("expr").map_err(|e| {
-        TemplateError::expression(format!("failed to get template: {}", e))
-    })?;
+    let template = env
+        .get_template("expr")
+        .map_err(|e| TemplateError::expression(format!("failed to get template: {}", e)))?;
 
-    let result = template.render(ctx.to_value()).map_err(|e| {
-        TemplateError::expression(e.to_string())
-    })?;
+    let result = template
+        .render(ctx.to_value())
+        .map_err(|e| TemplateError::expression(e.to_string()))?;
 
     // Parse the result back to a Value
     // For simple cases this works, but complex objects become strings
@@ -115,7 +115,10 @@ fn extract_undefined_var(msg: &str) -> String {
 /// Returns true if:
 /// - No condition specified
 /// - Condition evaluates to true
-pub fn should_execute_step(condition: Option<&str>, ctx: &TemplateContext) -> Result<bool, TemplateError> {
+pub fn should_execute_step(
+    condition: Option<&str>,
+    ctx: &TemplateContext,
+) -> Result<bool, TemplateError> {
     match condition {
         None => Ok(true),
         Some(cond) => evaluate_condition(cond, ctx),
@@ -182,9 +185,7 @@ mod tests {
         let ctx = ctx_with_step();
         assert!(evaluate_condition("true and true", &ctx).unwrap());
         assert!(!evaluate_condition("true and false", &ctx).unwrap());
-        assert!(
-            evaluate_condition("args.issue == '123' and steps.analyze.output", &ctx).unwrap()
-        );
+        assert!(evaluate_condition("args.issue == '123' and steps.analyze.output", &ctx).unwrap());
     }
 
     #[test]

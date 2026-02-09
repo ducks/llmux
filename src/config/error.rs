@@ -131,7 +131,11 @@ impl StepError {
         self
     }
 
-    pub fn with_timing(mut self, started_at: chrono::DateTime<chrono::Utc>, duration_ms: u64) -> Self {
+    pub fn with_timing(
+        mut self,
+        started_at: chrono::DateTime<chrono::Utc>,
+        duration_ms: u64,
+    ) -> Self {
         self.started_at = started_at;
         self.failed_at = chrono::Utc::now();
         self.duration_ms = duration_ms;
@@ -158,15 +162,32 @@ mod tests {
     #[test]
     fn test_error_kind_retryable() {
         assert!(ErrorKind::RateLimit { retry_after: None }.is_retryable());
-        assert!(ErrorKind::Timeout { elapsed: Duration::from_secs(30) }.is_retryable());
-        assert!(!ErrorKind::ConfigError { message: "bad".into() }.is_retryable());
-        assert!(!ErrorKind::AuthError { backend: "claude".into() }.is_retryable());
+        assert!(
+            ErrorKind::Timeout {
+                elapsed: Duration::from_secs(30)
+            }
+            .is_retryable()
+        );
+        assert!(
+            !ErrorKind::ConfigError {
+                message: "bad".into()
+            }
+            .is_retryable()
+        );
+        assert!(
+            !ErrorKind::AuthError {
+                backend: "claude".into()
+            }
+            .is_retryable()
+        );
     }
 
     #[test]
     fn test_step_error_display() {
         let err = StepError::new(
-            ErrorKind::Timeout { elapsed: Duration::from_secs(30) },
+            ErrorKind::Timeout {
+                elapsed: Duration::from_secs(30),
+            },
             "analyze",
         )
         .with_backend("codex")
