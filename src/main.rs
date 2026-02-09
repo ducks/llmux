@@ -1,3 +1,4 @@
+mod apply_and_verify;
 mod backend_executor;
 mod config;
 mod role;
