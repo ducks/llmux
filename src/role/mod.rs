@@ -28,8 +28,8 @@ mod role_resolver;
 mod team_detector;
 
 pub use role_executor::{ExecutionError, RoleExecutor, RoleResult};
-pub use role_resolver::{resolve_role, ResolvedRole, RoleError, RoleResolver};
-pub use team_detector::{default_teams, detect_team, TeamDetector};
+pub use role_resolver::{ResolvedRole, RoleError, RoleResolver, resolve_role};
+pub use team_detector::{TeamDetector, default_teams, detect_team};
 
 #[cfg(test)]
 mod tests {

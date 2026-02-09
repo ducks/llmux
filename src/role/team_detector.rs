@@ -117,7 +117,11 @@ pub fn default_teams() -> HashMap<String, TeamConfig> {
         "python".into(),
         TeamConfig {
             description: "Python development".into(),
-            detect: vec!["pyproject.toml".into(), "setup.py".into(), "requirements.txt".into()],
+            detect: vec![
+                "pyproject.toml".into(),
+                "setup.py".into(),
+                "requirements.txt".into(),
+            ],
             verify: Some("pytest".into()),
             ..Default::default()
         },

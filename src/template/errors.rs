@@ -212,7 +212,10 @@ mod tests {
         );
 
         // No good match
-        assert_eq!(suggest_correction("completely_different", &candidates), None);
+        assert_eq!(
+            suggest_correction("completely_different", &candidates),
+            None
+        );
 
         // Empty candidates
         assert_eq!(suggest_correction("anything", &[]), None);

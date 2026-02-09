@@ -29,8 +29,8 @@ mod types;
 
 pub use cli_backend::CliBackend;
 pub use http_backend::HttpBackend;
-pub use output_parser::{extract_json, parse_output, ParsedOutput};
-pub use retry::{with_default_retry, with_retry, RetryExecutor};
+pub use output_parser::{ParsedOutput, extract_json, parse_output};
+pub use retry::{RetryExecutor, with_default_retry, with_retry};
 pub use types::{
     BackendError, BackendExecutor, BackendRequest, BackendResponse, RetryPolicy, TokenUsage,
 };

@@ -114,6 +114,48 @@ fn default_retry_delay() -> u64 {
     1000
 }
 
+impl Default for StepConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            step_type: StepType::Shell,
+            role: None,
+            parallel: false,
+            min_success: None,
+            prompt: None,
+            run: None,
+            source: None,
+            verify: None,
+            verify_retries: 0,
+            verify_retry_prompt: None,
+            rollback_on_failure: false,
+            depends_on: Vec::new(),
+            condition: None,
+            for_each: None,
+            continue_on_error: false,
+            timeout: None,
+            retries: 0,
+            retry_delay: default_retry_delay(),
+            output_schema: None,
+            options: None,
+        }
+    }
+}
+
+impl Default for WorkflowConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            version: None,
+            args: HashMap::new(),
+            timeout: None,
+            continue_on_error: false,
+            steps: Vec::new(),
+        }
+    }
+}
+
 /// JSON Schema subset for output validation
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

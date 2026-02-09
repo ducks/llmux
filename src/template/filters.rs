@@ -23,7 +23,9 @@ fn filter_shell_escape(_state: &State, value: Value) -> Result<Value, Error> {
     let s = value.to_string();
 
     // If string contains no special characters, return as-is in quotes
-    if s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/') {
+    if s.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/')
+    {
         return Ok(Value::from(s));
     }
 
@@ -47,17 +49,17 @@ fn filter_shell_escape(_state: &State, value: Value) -> Result<Value, Error> {
 fn filter_json(_state: &State, value: Value) -> Result<Value, Error> {
     // minijinja Values can be serialized via serde
     let json = serde_json::to_string(&value).map_err(|e| {
-        Error::new(ErrorKind::InvalidOperation, format!("JSON serialization failed: {}", e))
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("JSON serialization failed: {}", e),
+        )
     })?;
     Ok(Value::from(json))
 }
 
 /// Join an array with a separator
 fn filter_join(_state: &State, value: Value, sep: Option<Value>) -> Result<Value, Error> {
-    let separator = sep
-        .as_ref()
-        .and_then(|v| v.as_str())
-        .unwrap_or(", ");
+    let separator = sep.as_ref().and_then(|v| v.as_str()).unwrap_or(", ");
 
     if value.is_undefined() || value.is_none() {
         return Ok(Value::from(""));
@@ -110,11 +112,7 @@ fn filter_default(_state: &State, value: Value, default: Value) -> Result<Value,
     if value.is_undefined() || value.is_none() {
         Ok(default)
     } else if let Some(s) = value.as_str() {
-        if s.is_empty() {
-            Ok(default)
-        } else {
-            Ok(value)
-        }
+        if s.is_empty() { Ok(default) } else { Ok(value) }
     } else {
         Ok(value)
     }
@@ -187,10 +185,7 @@ mod tests {
         use std::collections::HashMap;
         let mut map = HashMap::new();
         map.insert("key", "value");
-        let result = render(
-            "{{ value | json }}",
-            minijinja::context! { value => map },
-        );
+        let result = render("{{ value | json }}", minijinja::context! { value => map });
         assert!(result.contains("\"key\""));
         assert!(result.contains("\"value\""));
     }

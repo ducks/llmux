@@ -1,7 +1,7 @@
 //! Execute roles across backends with different execution modes
 
 use crate::backend_executor::{
-    create_executor, BackendError, BackendExecutor, BackendRequest, BackendResponse,
+    BackendError, BackendExecutor, BackendRequest, BackendResponse, create_executor,
 };
 use crate::config::{LlmuxConfig, RoleExecution, StepResult};
 use std::collections::HashMap;
@@ -18,9 +18,7 @@ pub enum ExecutionError {
     RoleError(#[from] RoleError),
 
     #[error("all backends failed")]
-    AllFailed {
-        errors: HashMap<String, String>,
-    },
+    AllFailed { errors: HashMap<String, String> },
 
     #[error("insufficient successes: got {got}, needed {needed}")]
     InsufficientSuccesses {
@@ -31,10 +29,7 @@ pub enum ExecutionError {
     },
 
     #[error("backend '{backend}' error: {message}")]
-    BackendError {
-        backend: String,
-        message: String,
-    },
+    BackendError { backend: String, message: String },
 }
 
 /// Result of executing a role

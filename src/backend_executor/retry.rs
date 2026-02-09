@@ -71,7 +71,10 @@ impl<T: BackendExecutor + 'static> BackendExecutor for RetryExecutor<T> {
 }
 
 /// Create a retry executor with custom policy
-pub fn with_retry<T: BackendExecutor + 'static>(backend: T, policy: RetryPolicy) -> RetryExecutor<T> {
+pub fn with_retry<T: BackendExecutor + 'static>(
+    backend: T,
+    policy: RetryPolicy,
+) -> RetryExecutor<T> {
     RetryExecutor::new(backend, policy)
 }
 
@@ -115,7 +118,10 @@ mod tests {
 
     #[async_trait]
     impl BackendExecutor for MockBackend {
-        async fn execute(&self, _request: &BackendRequest) -> Result<BackendResponse, BackendError> {
+        async fn execute(
+            &self,
+            _request: &BackendRequest,
+        ) -> Result<BackendResponse, BackendError> {
             let count = self.fail_count.fetch_add(1, Ordering::SeqCst);
             if count < self.fail_times {
                 Err(self.error.clone())
@@ -161,7 +167,10 @@ mod tests {
 
         let result = executor.execute(&BackendRequest::new("test")).await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), BackendError::RateLimit { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            BackendError::RateLimit { .. }
+        ));
     }
 
     #[tokio::test]
