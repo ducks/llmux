@@ -30,6 +30,9 @@ rand = "0.9"
 # Async traits
 async-trait = "0.1"
 
+# Regex for diff parsing
+regex = "1.10"
+
 # CLI
 clap = { version = "4.0", features = ["derive"] }
 
