@@ -89,12 +89,27 @@ impl DiffApplier {
                 }
                 EditOperation::OldNewPair { path, old, new } => {
                     let full_path = self.working_dir.join(path);
-                    let backup = self.create_backup(&full_path)?;
-                    self.apply_old_new(&full_path, old, new)?;
-                    modified_files.push(ModifiedFile {
-                        path: full_path,
-                        backup_path: backup,
-                    });
+                    // Empty old means create new file
+                    if old.is_empty() {
+                        if let Some(parent) = full_path.parent() {
+                            fs::create_dir_all(parent).map_err(|e| ApplyError::WriteError {
+                                path: parent.to_path_buf(),
+                                source: e,
+                            })?;
+                        }
+                        fs::write(&full_path, new).map_err(|e| ApplyError::WriteError {
+                            path: full_path.clone(),
+                            source: e,
+                        })?;
+                        created_files.push(full_path);
+                    } else {
+                        let backup = self.create_backup(&full_path)?;
+                        self.apply_old_new(&full_path, old, new)?;
+                        modified_files.push(ModifiedFile {
+                            path: full_path,
+                            backup_path: backup,
+                        });
+                    }
                 }
                 EditOperation::FullFile { path, content } => {
                     let full_path = self.working_dir.join(path);
@@ -423,6 +438,26 @@ mod tests {
 
         let content = fs::read_to_string(dir.path().join("new_file.rs")).unwrap();
         assert_eq!(content, "fn created() {}");
+    }
+
+    #[test]
+    fn test_apply_old_new_create_file() {
+        let dir = TempDir::new().unwrap();
+        let applier = DiffApplier::new(dir.path());
+
+        // Empty old means create new file
+        let edits = vec![EditOperation::OldNewPair {
+            path: PathBuf::from("subdir/new_file.rs"),
+            old: String::new(),
+            new: "fn new_function() {}".to_string(),
+        }];
+
+        let result = applier.apply(&edits).unwrap();
+        assert_eq!(result.created_files.len(), 1);
+        assert_eq!(result.modified_files.len(), 0);
+
+        let content = fs::read_to_string(dir.path().join("subdir/new_file.rs")).unwrap();
+        assert_eq!(content, "fn new_function() {}");
     }
 
     #[test]
