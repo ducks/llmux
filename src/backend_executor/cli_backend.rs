@@ -316,7 +316,7 @@ mod tests {
             .with_timeout(Duration::from_secs(5));
 
         // Close stdout immediately, then write >64KB to stderr
-        let script = "exec >&-; for i in $(seq 1 2000); do echo \"stderr line $i\" >&2; done";
+        let script = "exec >&-; for i in $(seq 1 5000); do echo \"stderr line $i\" >&2; done";
         let request = BackendRequest::new(script);
 
         let result = backend.execute(&request).await;
