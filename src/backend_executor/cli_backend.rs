@@ -134,11 +134,12 @@ impl BackendExecutor for CliBackend {
 
         // Read output with timeout
         let result = tokio::time::timeout(timeout, async {
+            let mut stdout_done = false;
             let mut stderr_done = false;
-            loop {
+            while !stdout_done || !stderr_done {
                 tokio::select! {
                     biased;
-                    line = stdout_reader.next_line() => {
+                    line = stdout_reader.next_line(), if !stdout_done => {
                         match line {
                             Ok(Some(l)) => {
                                 eprintln!("[DEBUG {}] stdout: {}", self.name, l.chars().take(50).collect::<String>());
@@ -146,7 +147,7 @@ impl BackendExecutor for CliBackend {
                             }
                             Ok(None) => {
                                 eprintln!("[DEBUG {}] stdout EOF", self.name);
-                                break;
+                                stdout_done = true;
                             }
                             Err(e) => return Err(BackendError::parse(format!("stdout read error: {}", e))),
                         }
@@ -304,6 +305,22 @@ mod tests {
         let response = backend.execute(&request).await.unwrap();
         // Should have attempted JSON parsing
         assert!(response.structured.is_some() || response.text.contains("key"));
+    }
+
+    #[tokio::test]
+    async fn test_cli_backend_large_stderr_stdout_eof() {
+        // Regression test for issue #32: loop must drain both streams
+        // before waiting, or large stderr after stdout EOF causes deadlock
+        let backend = CliBackend::new("sh", "sh")
+            .with_args(vec!["-c".into()])
+            .with_timeout(Duration::from_secs(5));
+
+        // Close stdout immediately, then write >64KB to stderr
+        let script = "exec >&-; for i in $(seq 1 2000); do echo \"stderr line $i\" >&2; done";
+        let request = BackendRequest::new(script);
+
+        let result = backend.execute(&request).await;
+        assert!(result.is_ok());
     }
 
     #[test]
