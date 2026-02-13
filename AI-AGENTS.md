@@ -19,9 +19,7 @@ and workflow engine for LLM queries.
 ```
 src/
 ├── main.rs               # CLI entry point
-├── lib.rs                # Library exports
 ├── process.rs            # Child process management
-├── utils.rs              # Shared utilities (error classification, etc.)
 ├── cli/
 │   ├── mod.rs
 │   ├── commands.rs       # CLI command handlers
@@ -50,6 +48,12 @@ src/
 │   ├── role_resolver.rs  # Resolve role -> backends
 │   ├── role_executor.rs  # Execute queries via roles
 │   └── team_detector.rs  # Auto-detect team configurations
+├── backend_executor/
+│   ├── mod.rs
+│   ├── types.rs          # Backend error types and classification
+│   ├── output_parser.rs  # Parse and validate backend output
+│   ├── cli_backend.rs    # CLI backend executor
+│   └── http_backend.rs   # HTTP API backend executor
 └── apply_and_verify/
     ├── mod.rs
     ├── edit_parser.rs    # Parse LLM edit suggestions
@@ -80,7 +84,7 @@ nix-shell --run "cargo run -- run workflow-name"
 - Use `anyhow::Result` for fallible functions
 - Use `thiserror` for custom error types
 - Prefer `context()` over `unwrap()` for better error messages
-- Classify backend errors in `utils.rs` for user-friendly messages
+- Classify backend errors in `backend_executor/types.rs` for user-friendly messages
 
 ### Async
 - All backend queries are async
@@ -96,7 +100,7 @@ nix-shell --run "cargo run -- run workflow-name"
 ### Output
 - Use `colored` crate for terminal colors
 - Keep output concise
-- Summarize backend errors to one-liners (see `utils.rs`)
+- Summarize backend errors to one-liners (see `backend_executor/types.rs`)
 
 ### Templates
 - Use MiniJinja (`{{ variable }}` syntax)
