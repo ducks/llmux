@@ -105,6 +105,7 @@ pub async fn run_verify(
             Err(_) => {
                 // Kill the process on timeout
                 let _ = child.kill().await;
+                let _ = child.wait().await; // Reap the process
                 return Err(VerifyError::Timeout(dur));
             }
         }
