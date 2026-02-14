@@ -491,6 +491,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_execute_shell_timeout() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1".into()),
+            timeout: Some(50),
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path()).await;
+
+        assert!(matches!(result, Err(StepExecutionError::ShellTimeout(_))));
+    }
+
+    #[tokio::test]
+    async fn test_execute_shell_timeout_continue_on_error() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1".into()),
+            timeout: Some(50),
+            continue_on_error: true,
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path())
+            .await
+            .unwrap();
+
+        assert!(result.failed);
+        assert!(result.error.unwrap().contains("timed out"));
+    }
+
+    #[tokio::test]
+    async fn test_execute_shell_timeout_success() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1; echo done".into()),
+            timeout: Some(2000),
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path())
+            .await
+            .unwrap();
+
+        assert!(!result.failed);
+        assert!(result.output.unwrap().contains("done"));
+    }
+
+    #[tokio::test]
     async fn test_execute_shell_continue_on_error() {
         let config = Arc::new(create_test_config());
         let ctx = ExecutionContext::new(config);
