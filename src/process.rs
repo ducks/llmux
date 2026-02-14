@@ -1,5 +1,6 @@
 //! Process utilities for child process management.
 
+use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 
 #[cfg(unix)]
@@ -37,6 +38,95 @@ pub(crate) async fn capture_exit_code(child: &mut Child) -> Option<i32> {
         Ok(None) => child.wait().await.ok().and_then(|status| exit_status_code(&status)),
         Err(_) => None,
     }
+}
+
+/// Stream types for child processes.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OutputStream {
+    /// Standard output stream.
+    Stdout,
+    /// Standard error stream.
+    Stderr,
+}
+
+/// Errors occurring while waiting for child process output.
+#[derive(Debug)]
+pub(crate) enum OutputWaitError {
+    /// Error reading from a stream.
+    Read {
+        /// The stream where the error occurred.
+        stream: OutputStream,
+        /// The underlying IO error.
+        source: std::io::Error,
+        /// The exit code of the process if it has already exited.
+        exit_code: Option<i32>,
+    },
+    /// Error waiting for the process to exit.
+    Wait {
+        /// The underlying IO error.
+        source: std::io::Error,
+    },
+}
+
+/// Wait for child output, reading stdout/stderr concurrently to avoid deadlock.
+pub(crate) async fn wait_for_child_output(
+    child: &mut Child,
+) -> Result<(String, String, std::process::ExitStatus), OutputWaitError> {
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+
+    let stdout_fut = async {
+        if let Some(mut out) = stdout_pipe {
+            let mut buf = String::new();
+            out.read_to_string(&mut buf).await.map(|_| buf)
+        } else {
+            Ok(String::new())
+        }
+    };
+
+    let stderr_fut = async {
+        if let Some(mut err) = stderr_pipe {
+            let mut buf = String::new();
+            err.read_to_string(&mut buf).await.map(|_| buf)
+        } else {
+            Ok(String::new())
+        }
+    };
+
+    let (stdout_result, stderr_result) = tokio::join!(stdout_fut, stderr_fut);
+
+    let stdout = match stdout_result {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = child.kill().await;
+            let exit_code = capture_exit_code(child).await;
+            return Err(OutputWaitError::Read {
+                stream: OutputStream::Stdout,
+                source: e,
+                exit_code,
+            });
+        }
+    };
+
+    let stderr = match stderr_result {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = child.kill().await;
+            let exit_code = capture_exit_code(child).await;
+            return Err(OutputWaitError::Read {
+                stream: OutputStream::Stderr,
+                source: e,
+                exit_code,
+            });
+        }
+    };
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| OutputWaitError::Wait { source: e })?;
+
+    Ok((stdout, stderr, status))
 }
 
 #[cfg(test)]

@@ -12,8 +12,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use crate::process::{capture_exit_code, exit_status_code};
-use tokio::io::AsyncReadExt;
+use crate::process::{exit_status_code, wait_for_child_output, OutputStream, OutputWaitError};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -148,9 +147,30 @@ async fn execute_shell_step(
 
     let timeout_duration = step.timeout.map(Duration::from_millis);
 
+    let map_wait_error = |err: OutputWaitError| match err {
+        OutputWaitError::Read {
+            stream,
+            source,
+            exit_code,
+        } => {
+            let stream_label = match stream {
+                OutputStream::Stdout => "stdout",
+                OutputStream::Stderr => "stderr",
+            };
+            StepExecutionError::ShellFailed {
+                message: format!("failed to read {}: {}", stream_label, source),
+                exit_code,
+            }
+        }
+        OutputWaitError::Wait { source } => StepExecutionError::ShellFailed {
+            message: format!("failed to wait: {}", source),
+            exit_code: None,
+        },
+    };
+
     let output_result = if let Some(dur) = timeout_duration {
-        match timeout(dur, wait_for_shell_output(&mut child)).await {
-            Ok(result) => result,
+        match timeout(dur, wait_for_child_output(&mut child)).await {
+            Ok(result) => result.map_err(map_wait_error),
             Err(_) => {
                 let _ = child.kill().await;
                 let _ = child.wait().await; // Reap the process
@@ -170,7 +190,7 @@ async fn execute_shell_step(
             }
         }
     } else {
-        wait_for_shell_output(&mut child).await
+        wait_for_child_output(&mut child).await.map_err(map_wait_error)
     };
 
     let (stdout, stderr, status) = output_result?;
@@ -211,70 +231,6 @@ async fn execute_shell_step(
             })
         }
     }
-}
-
-/// Wait for shell command output, reading stdout and stderr concurrently.
-async fn wait_for_shell_output(
-    child: &mut tokio::process::Child,
-) -> Result<(String, String, std::process::ExitStatus), StepExecutionError> {
-    // Read stdout and stderr concurrently to avoid deadlock when child produces
-    // >64KB on one stream while we're blocked reading the other
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
-
-    let stdout_fut = async {
-        if let Some(mut out) = stdout_pipe {
-            let mut buf = String::new();
-            out.read_to_string(&mut buf).await.map(|_| buf)
-        } else {
-            Ok(String::new())
-        }
-    };
-
-    let stderr_fut = async {
-        if let Some(mut err) = stderr_pipe {
-            let mut buf = String::new();
-            err.read_to_string(&mut buf).await.map(|_| buf)
-        } else {
-            Ok(String::new())
-        }
-    };
-
-    let (stdout_result, stderr_result) = tokio::join!(stdout_fut, stderr_fut);
-
-    let stdout = match stdout_result {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = child.kill().await;
-            let exit_code = capture_exit_code(child).await;
-            return Err(StepExecutionError::ShellFailed {
-                message: format!("failed to read stdout: {}", e),
-                exit_code,
-            });
-        }
-    };
-
-    let stderr = match stderr_result {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = child.kill().await;
-            let exit_code = capture_exit_code(child).await;
-            return Err(StepExecutionError::ShellFailed {
-                message: format!("failed to read stderr: {}", e),
-                exit_code,
-            });
-        }
-    };
-
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| StepExecutionError::ShellFailed {
-            message: format!("failed to wait: {}", e),
-            exit_code: None,
-        })?;
-
-    Ok((stdout, stderr, status))
 }
 
 /// Execute a query step
@@ -488,6 +444,76 @@ mod tests {
             result,
             Err(StepExecutionError::ShellFailed { .. })
         ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_execute_shell_timeout() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1".into()),
+            timeout: Some(50),
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path()).await;
+
+        assert!(matches!(result, Err(StepExecutionError::ShellTimeout(_))));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_execute_shell_timeout_continue_on_error() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1".into()),
+            timeout: Some(50),
+            continue_on_error: true,
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path())
+            .await
+            .unwrap();
+
+        assert!(result.failed);
+        assert!(result.error.unwrap().contains("timed out"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_execute_shell_timeout_success() {
+        let config = Arc::new(create_test_config());
+        let ctx = ExecutionContext::new(config);
+        let template_ctx = TemplateContext::new();
+        let dir = TempDir::new().unwrap();
+
+        let step = StepConfig {
+            name: "test".into(),
+            step_type: StepType::Shell,
+            run: Some("sleep 1; echo done".into()),
+            timeout: Some(2000),
+            ..Default::default()
+        };
+
+        let result = execute_step(&step, &ctx, &template_ctx, None, dir.path())
+            .await
+            .unwrap();
+
+        assert!(!result.failed);
+        assert!(result.output.unwrap().contains("done"));
     }
 
     #[tokio::test]
