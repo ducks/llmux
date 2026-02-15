@@ -38,6 +38,10 @@ struct Cli {
     #[arg(long, global = true, default_value = "console")]
     output: String,
 
+    /// Write workflow output to file
+    #[arg(long, global = true)]
+    output_file: Option<PathBuf>,
+
     /// Enable debug output
     #[arg(long, global = true)]
     debug: bool,
@@ -125,6 +129,7 @@ async fn main() -> Result<()> {
                 cli.team.as_deref(),
                 config,
                 &*handler,
+                cli.output_file.as_deref(),
             )
             .await
             {
