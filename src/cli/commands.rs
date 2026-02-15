@@ -56,6 +56,11 @@ pub async fn run_workflow(
     // Write to file if specified
     if let Some(path) = output_file {
         if let Some(output) = final_output {
+            // Create parent directories if they don't exist
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create directory {}: {}", parent.display(), e))?;
+            }
             std::fs::write(path, output)
                 .map_err(|e| format!("Failed to write output to {}: {}", path.display(), e))?;
         }
