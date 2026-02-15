@@ -16,6 +16,7 @@ pub async fn run_workflow(
     team_override: Option<&str>,
     config: Arc<LlmuxConfig>,
     handler: &dyn OutputHandler,
+    output_file: Option<&Path>,
 ) -> Result<i32, String> {
     // Load workflow
     let workflow = load_workflow(workflow_name, Some(working_dir))
@@ -51,6 +52,14 @@ pub async fn run_workflow(
         .filter_map(|s| s.output.as_ref())
         .last()
         .map(|s| s.as_str());
+
+    // Write to file if specified
+    if let Some(path) = output_file {
+        if let Some(output) = final_output {
+            std::fs::write(path, output)
+                .map_err(|e| format!("Failed to write output to {}: {}", path.display(), e))?;
+        }
+    }
 
     handler.result(result.success, final_output);
 
