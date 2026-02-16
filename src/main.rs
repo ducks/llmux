@@ -89,7 +89,7 @@ enum Commands {
 
     /// Interactive configuration setup
     Init {
-        /// Initialize global config (~/.config/llmux/config.toml)
+        /// Initialize global config (~/.config/llm-mux/config.toml)
         #[arg(long, conflicts_with = "project")]
         global: bool,
 

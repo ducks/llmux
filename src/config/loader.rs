@@ -124,8 +124,8 @@ impl LlmuxConfig {
     ///
     /// Load order (later overrides earlier):
     /// 1. Built-in defaults
-    /// 2. ~/.config/llmux/config.toml
-    /// 3. .llmux/config.toml (project)
+    /// 2. ~/.config/llm-mux/config.toml
+    /// 3. .llm-mux/config.toml (project)
     pub fn load(project_dir: Option<&Path>) -> Result<Self> {
         let mut config = Self::default();
 
@@ -161,9 +161,9 @@ impl LlmuxConfig {
         Ok(config)
     }
 
-    /// Get the user config path (~/.config/llmux/config.toml)
+    /// Get the user config path (~/.config/llm-mux/config.toml)
     pub fn user_config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|p| p.join("llmux/config.toml"))
+        dirs::config_dir().map(|p| p.join("llm-mux/config.toml"))
     }
 
     /// Merge another config into this one (other takes precedence)
