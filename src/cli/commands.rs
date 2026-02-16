@@ -392,7 +392,7 @@ pub async fn init_config(
             message: "Initialize configuration:".into(),
         });
         handler.emit(OutputEvent::Info {
-            message: "  1. Global (~/.config/llmux/config.toml) - backends for all projects".into(),
+            message: "  1. Global (~/.config/llm-mux/config.toml) - backends for all projects".into(),
         });
         handler.emit(OutputEvent::Info {
             message: "  2. Project (.llm-mux/config.toml) - roles/teams for this project".into(),
@@ -406,7 +406,7 @@ pub async fn init_config(
     let config_path = if is_global {
         dirs::config_dir()
             .ok_or_else(|| "Could not determine config directory".to_string())?
-            .join("llmux")
+            .join("llm-mux")
             .join("config.toml")
     } else {
         working_dir.join(".llm-mux").join("config.toml")
@@ -612,7 +612,7 @@ pub async fn init_config(
             message: "  2. Run 'llm-mux init --project' in your project directories".into(),
         });
         handler.emit(OutputEvent::Info {
-            message: "  3. Create workflows in ~/.config/llmux/workflows/".into(),
+            message: "  3. Create workflows in ~/.config/llm-mux/workflows/".into(),
         });
     } else {
         handler.emit(OutputEvent::Info {
