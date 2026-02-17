@@ -114,12 +114,12 @@ impl BackendExecutor for CliBackend {
             cmd.current_dir(dir);
         }
 
-        eprintln!(
-            "[DEBUG {}] spawning: {} {:?} {:?}",
-            self.name,
-            self.command,
-            self.args,
-            request.prompt.len()
+        tracing::debug!(
+            backend = %self.name,
+            command = %self.command,
+            args = ?self.args,
+            prompt_len = request.prompt.len(),
+            "Spawning backend process"
         );
 
         // Spawn the process
@@ -147,11 +147,11 @@ impl BackendExecutor for CliBackend {
                     line = stdout_reader.next_line(), if !stdout_done => {
                         match line {
                             Ok(Some(l)) => {
-                                eprintln!("[DEBUG {}] stdout: {}", self.name, l.chars().take(50).collect::<String>());
+                                tracing::trace!(backend = %self.name, line = %l.chars().take(50).collect::<String>(), "stdout");
                                 stdout_lines.push(l);
                             }
                             Ok(None) => {
-                                eprintln!("[DEBUG {}] stdout EOF", self.name);
+                                tracing::trace!(backend = %self.name, "stdout EOF");
                                 stdout_done = true;
                             }
                             Err(e) => return Err(BackendError::parse(format!("stdout read error: {}", e))),
@@ -160,11 +160,11 @@ impl BackendExecutor for CliBackend {
                     line = stderr_reader.next_line(), if !stderr_done => {
                         match line {
                             Ok(Some(l)) => {
-                                eprintln!("[DEBUG {}] stderr: {}", self.name, l.chars().take(50).collect::<String>());
+                                tracing::trace!(backend = %self.name, line = %l.chars().take(50).collect::<String>(), "stderr");
                                 stderr_lines.push(l);
                             }
                             Ok(None) => {
-                                eprintln!("[DEBUG {}] stderr EOF", self.name);
+                                tracing::trace!(backend = %self.name, "stderr EOF");
                                 stderr_done = true;
                             }
                             Err(e) => return Err(BackendError::parse(format!("stderr read error: {}", e))),
