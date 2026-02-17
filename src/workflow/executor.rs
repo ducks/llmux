@@ -260,7 +260,18 @@ async fn execute_query_step(
         })?;
 
     // Render prompt template
-    let rendered_prompt = ctx.template_engine.render(prompt, template_ctx)?;
+    let mut rendered_prompt = ctx.template_engine.render(prompt, template_ctx)?;
+
+    // If output_schema is present, append JSON formatting instructions
+    if let Some(ref schema) = step.output_schema {
+        let schema_json = serde_json::to_string_pretty(schema)
+            .unwrap_or_else(|_| "{}".to_string());
+
+        rendered_prompt.push_str(&format!(
+            "\n\nIMPORTANT: You MUST respond with valid JSON matching this schema:\n```json\n{}\n```\n\nDo not include any text before or after the JSON object.",
+            schema_json
+        ));
+    }
 
     // Resolve role to backends
     let resolved_role = resolve_role(role_name, team, &ctx.config)?;
@@ -270,8 +281,89 @@ async fn execute_query_step(
 
     // Execute
     let result = ctx.role_executor.execute(&resolved_role, &request).await?;
+    let mut step_result = result.to_step_result();
 
-    Ok(result.to_step_result())
+    // Validate against schema if present
+    if let Some(ref schema) = step.output_schema {
+        if let Some(ref output) = step_result.output {
+            if let Err(e) = validate_json_schema(output, schema) {
+                step_result.failed = true;
+                step_result.error = Some(format!("Output validation failed: {}", e));
+            }
+        }
+    }
+
+    Ok(step_result)
+}
+
+/// Validate JSON output against a schema
+fn validate_json_schema(output: &str, schema: &crate::config::OutputSchema) -> Result<(), String> {
+    // Parse the output as JSON
+    let json: serde_json::Value = serde_json::from_str(output)
+        .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    // Check that it's an object if schema_type is "object"
+    if schema.schema_type == "object" {
+        let obj = json.as_object()
+            .ok_or_else(|| "Expected object, got something else".to_string())?;
+
+        // Check required fields
+        for required_field in &schema.required {
+            if !obj.contains_key(required_field) {
+                return Err(format!("Missing required field: {}", required_field));
+            }
+        }
+
+        // Validate property types
+        for (prop_name, prop_schema) in &schema.properties {
+            if let Some(value) = obj.get(prop_name) {
+                validate_property_type(value, prop_schema)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate a property value against its schema
+fn validate_property_type(value: &serde_json::Value, schema: &crate::config::PropertySchema) -> Result<(), String> {
+    match schema.prop_type.as_str() {
+        "string" => {
+            if !value.is_string() {
+                return Err(format!("Expected string, got {:?}", value));
+            }
+        }
+        "number" => {
+            if !value.is_number() {
+                return Err(format!("Expected number, got {:?}", value));
+            }
+        }
+        "boolean" => {
+            if !value.is_boolean() {
+                return Err(format!("Expected boolean, got {:?}", value));
+            }
+        }
+        "array" => {
+            let arr = value.as_array()
+                .ok_or_else(|| format!("Expected array, got {:?}", value))?;
+
+            // If items schema is present, validate each item
+            if let Some(ref items_schema) = schema.items {
+                for item in arr {
+                    validate_property_type(item, items_schema)?;
+                }
+            }
+        }
+        "object" => {
+            if !value.is_object() {
+                return Err(format!("Expected object, got {:?}", value));
+            }
+        }
+        _ => {
+            return Err(format!("Unknown type: {}", schema.prop_type));
+        }
+    }
+    Ok(())
 }
 
 /// Execute an apply step
