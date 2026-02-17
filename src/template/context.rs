@@ -2,7 +2,7 @@
 
 //! Template context for variable resolution
 
-use crate::config::{RoleConfig, StepResult, TeamConfig};
+use crate::config::{EcosystemConfig, RoleConfig, StepResult, TeamConfig};
 use minijinja::value::{Object, Value, ValueKind};
 use std::collections::HashMap;
 use std::fmt;
@@ -23,11 +23,27 @@ pub struct TemplateContext {
     /// Available roles
     pub roles: HashMap<String, RoleConfig>,
 
+    /// Current ecosystem configuration (if detected)
+    pub ecosystem: Option<EcosystemContext>,
+
     /// Current item for `for_each` iteration
     pub item: Option<Value>,
 
     /// Workflow name
     pub workflow: Option<String>,
+}
+
+/// Ecosystem context for templates
+#[derive(Debug, Clone)]
+pub struct EcosystemContext {
+    /// Ecosystem name
+    pub name: String,
+
+    /// Ecosystem configuration
+    pub config: EcosystemConfig,
+
+    /// Current project name (if in a project directory)
+    pub current_project: Option<String>,
 }
 
 impl TemplateContext {
@@ -69,6 +85,15 @@ impl TemplateContext {
         self.workflow = Some(name.into());
     }
 
+    /// Set the ecosystem context
+    pub fn set_ecosystem(&mut self, name: impl Into<String>, config: EcosystemConfig, current_project: Option<String>) {
+        self.ecosystem = Some(EcosystemContext {
+            name: name.into(),
+            config,
+            current_project,
+        });
+    }
+
     /// Convert to a minijinja Value for template rendering
     pub fn to_value(&self) -> Value {
         Value::from_object(ContextObject(self.clone()))
@@ -79,6 +104,9 @@ impl TemplateContext {
         let mut vars = vec!["steps", "args", "env", "item", "workflow"];
         if self.team.is_some() {
             vars.push("team");
+        }
+        if self.ecosystem.is_some() {
+            vars.push("ecosystem");
         }
         vars
     }
@@ -110,6 +138,11 @@ impl Object for ContextObject {
                 .team
                 .as_ref()
                 .map(|t| Value::from_object(TeamObject(t.clone()))),
+            "ecosystem" => self
+                .0
+                .ecosystem
+                .as_ref()
+                .map(|e| Value::from_object(EcosystemObject(e.clone()))),
             "item" => self.0.item.clone(),
             "workflow" => self.0.workflow.as_ref().map(|w| Value::from(w.clone())),
             "env" => Some(Value::from_object(EnvObject)),
@@ -118,7 +151,7 @@ impl Object for ContextObject {
     }
 
     fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
-        minijinja::value::Enumerator::Str(&["steps", "args", "team", "item", "workflow", "env"])
+        minijinja::value::Enumerator::Str(&["steps", "args", "team", "ecosystem", "item", "workflow", "env"])
     }
 }
 
@@ -246,6 +279,91 @@ impl Object for TeamObject {
 
     fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
         minijinja::value::Enumerator::Str(&["description", "detect", "verify"])
+    }
+}
+
+/// Object for ecosystem context
+#[derive(Debug, Clone)]
+struct EcosystemObject(EcosystemContext);
+
+impl fmt::Display for EcosystemObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ecosystem:{}", self.0.name)
+    }
+}
+
+impl Object for EcosystemObject {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        let key_str = key.as_str()?;
+        match key_str {
+            "name" => Some(Value::from(self.0.name.clone())),
+            "description" => Some(Value::from(self.0.config.description.clone())),
+            "knowledge" => Some(Value::from_iter(
+                self.0.config.knowledge.iter().cloned().map(Value::from),
+            )),
+            "projects" => {
+                let projects: Vec<Value> = self
+                    .0
+                    .config
+                    .projects
+                    .iter()
+                    .map(|(name, project)| {
+                        let mut map = HashMap::new();
+                        map.insert("name", Value::from(name.clone()));
+                        map.insert("path", Value::from(project.path.display().to_string()));
+                        if let Some(ref t) = project.project_type {
+                            map.insert("type", Value::from(t.clone()));
+                        }
+                        map.insert(
+                            "depends_on",
+                            Value::from_iter(project.depends_on.iter().cloned().map(Value::from)),
+                        );
+                        map.insert(
+                            "tags",
+                            Value::from_iter(project.tags.iter().cloned().map(Value::from)),
+                        );
+                        if !project.description.is_empty() {
+                            map.insert("description", Value::from(project.description.clone()));
+                        }
+                        Value::from_iter(map.into_iter().map(|(k, v)| (Value::from(k), v)))
+                    })
+                    .collect();
+                Some(Value::from_iter(projects))
+            }
+            "current_project" => {
+                if let Some(ref project_name) = self.0.current_project {
+                    if let Some(project) = self.0.config.projects.get(project_name) {
+                        let mut map = HashMap::new();
+                        map.insert("name", Value::from(project_name.clone()));
+                        map.insert("path", Value::from(project.path.display().to_string()));
+                        if let Some(ref t) = project.project_type {
+                            map.insert("type", Value::from(t.clone()));
+                        }
+                        map.insert(
+                            "depends_on",
+                            Value::from_iter(project.depends_on.iter().cloned().map(Value::from)),
+                        );
+                        map.insert(
+                            "tags",
+                            Value::from_iter(project.tags.iter().cloned().map(Value::from)),
+                        );
+                        if !project.description.is_empty() {
+                            map.insert("description", Value::from(project.description.clone()));
+                        }
+                        Some(Value::from_iter(map.into_iter().map(|(k, v)| (Value::from(k), v))))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&["name", "description", "knowledge", "projects", "current_project"])
     }
 }
 
