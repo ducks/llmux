@@ -217,6 +217,13 @@ verify = "cargo test"
 verify_retries = 2
 rollback_on_failure = true
 depends_on = ["analyze"]
+
+# Store: persist data to SQLite memory database
+[[steps]]
+name = "save_facts"
+type = "store"
+prompt = "{{ steps.analyze.output }}"
+depends_on = ["analyze"]
 ```
 
 ### Template Variables
@@ -259,6 +266,70 @@ type = "shell"
 run = "wc -l {{ item }}"
 for_each = "steps.list.output | lines"
 ```
+
+### Store Steps and Ecosystem Memory
+
+Store steps persist LLM analysis results to a SQLite database for later querying.
+
+**Database Location:**
+`~/.config/llm-mux/memory/<ecosystem-name>.db`
+
+**Data Format:**
+Store steps parse JSON from previous steps and save to the memory database.
+
+Facts require:
+```json
+{
+  "facts": [
+    {
+      "project": "project-name",
+      "fact": "description",
+      "source": "where found (e.g., Cargo.toml)",
+      "confidence": 1.0
+    }
+  ]
+}
+```
+
+Relationships require:
+```json
+{
+  "relationships": [
+    {
+      "from": "source-project",
+      "to": "target-project",
+      "type": "depends_on|calls_api|shares_db|deploys_with",
+      "evidence": "brief explanation"
+    }
+  ]
+}
+```
+
+**Usage:**
+```toml
+[[steps]]
+name = "analyze"
+type = "query"
+role = "analyzer"
+prompt = """
+Analyze the codebase and return facts.
+
+IMPORTANT: Return JSON with this exact structure:
+{
+  "facts": [
+    {"project": "myapp", "fact": "Uses PostgreSQL", "source": "config.yml", "confidence": 1.0}
+  ]
+}
+"""
+
+[[steps]]
+name = "store"
+type = "store"
+prompt = "{{ steps.analyze.output }}"
+depends_on = ["analyze"]
+```
+
+See `examples/workflows/discover-ecosystem.toml` for a complete example.
 
 ## CLI Reference
 
@@ -374,6 +445,53 @@ Dependencies to consider:
 Focus on common issues for {{ ecosystem.current_project.type }} projects.
 """
 ```
+
+### Ecosystem Discovery
+
+Analyze projects and store findings in the memory database:
+
+```toml
+name = "discover"
+description = "Discover and store ecosystem facts"
+
+[[steps]]
+name = "analyze"
+type = "query"
+role = "analyzer"
+timeout = 180
+prompt = """
+Analyze the {{ ecosystem.current_project.name }} project structure.
+
+IMPORTANT: Return JSON with this exact structure:
+{
+  "facts": [
+    {
+      "project": "project-name",
+      "fact": "brief fact description",
+      "source": "where you found this (e.g., Cargo.toml)",
+      "confidence": 1.0
+    }
+  ]
+}
+
+Each fact MUST have all four fields: project, fact, source, confidence.
+"""
+
+[steps.output_schema]
+type = "object"
+required = ["facts"]
+
+[steps.output_schema.properties.facts]
+type = "array"
+
+[[steps]]
+name = "store"
+type = "store"
+prompt = "{{ steps.analyze.output }}"
+depends_on = ["analyze"]
+```
+
+See `examples/workflows/discover-ecosystem.toml` for a complete implementation with multiple analysis steps and relationship discovery.
 
 ## Contributing
 
