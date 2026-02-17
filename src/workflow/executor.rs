@@ -77,10 +77,17 @@ pub async fn execute_step(
 ) -> Result<StepResult, StepExecutionError> {
     let start = Instant::now();
 
+    tracing::info!(
+        step = %step.name,
+        step_type = ?step.step_type,
+        "Executing step"
+    );
+
     // Check condition
     if let Some(ref condition) = step.condition {
         let should_run = evaluate_condition(condition, template_ctx)?;
         if !should_run {
+            tracing::info!(step = %step.name, "Step skipped: condition evaluated to false");
             return Ok(StepResult {
                 output: None,
                 outputs: std::collections::HashMap::new(),
@@ -93,10 +100,11 @@ pub async fn execute_step(
         }
     }
 
-    match step.step_type {
+    let result = match step.step_type {
         StepType::Shell => execute_shell_step(step, ctx, template_ctx, working_dir).await,
         StepType::Query => execute_query_step(step, ctx, template_ctx, team).await,
         StepType::Apply => execute_apply_step(step, ctx, template_ctx, working_dir).await,
+        StepType::Store => execute_store_step(step, ctx, template_ctx).await,
         StepType::Input => {
             // Input steps require user interaction
             Ok(StepResult {
@@ -109,7 +117,36 @@ pub async fn execute_step(
                 backends: Vec::new(),
             })
         }
+    };
+
+    match &result {
+        Ok(step_result) => {
+            if step_result.failed {
+                tracing::error!(
+                    step = %step.name,
+                    error = ?step_result.error,
+                    duration_ms = step_result.duration_ms,
+                    "Step failed"
+                );
+            } else {
+                tracing::info!(
+                    step = %step.name,
+                    duration_ms = step_result.duration_ms,
+                    backend = ?step_result.backend,
+                    "Step completed"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::error!(
+                step = %step.name,
+                error = %e,
+                "Step execution error"
+            );
+        }
     }
+
+    result
 }
 
 /// Execute a shell step
@@ -259,7 +296,18 @@ async fn execute_query_step(
         })?;
 
     // Render prompt template
-    let rendered_prompt = ctx.template_engine.render(prompt, template_ctx)?;
+    let mut rendered_prompt = ctx.template_engine.render(prompt, template_ctx)?;
+
+    // If output_schema is present, append JSON formatting instructions
+    if let Some(ref schema) = step.output_schema {
+        let schema_json = serde_json::to_string_pretty(schema)
+            .unwrap_or_else(|_| "{}".to_string());
+
+        rendered_prompt.push_str(&format!(
+            "\n\nIMPORTANT: You MUST respond with valid JSON matching this schema:\n```json\n{}\n```\n\nDo not include any text before or after the JSON object.",
+            schema_json
+        ));
+    }
 
     // Resolve role to backends
     let resolved_role = resolve_role(role_name, team, &ctx.config)?;
@@ -269,8 +317,89 @@ async fn execute_query_step(
 
     // Execute
     let result = ctx.role_executor.execute(&resolved_role, &request).await?;
+    let mut step_result = result.to_step_result();
 
-    Ok(result.to_step_result())
+    // Validate against schema if present
+    if let Some(ref schema) = step.output_schema {
+        if let Some(ref output) = step_result.output {
+            if let Err(e) = validate_json_schema(output, schema) {
+                step_result.failed = true;
+                step_result.error = Some(format!("Output validation failed: {}", e));
+            }
+        }
+    }
+
+    Ok(step_result)
+}
+
+/// Validate JSON output against a schema
+fn validate_json_schema(output: &str, schema: &crate::config::OutputSchema) -> Result<(), String> {
+    // Parse the output as JSON
+    let json: serde_json::Value = serde_json::from_str(output)
+        .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    // Check that it's an object if schema_type is "object"
+    if schema.schema_type == "object" {
+        let obj = json.as_object()
+            .ok_or_else(|| "Expected object, got something else".to_string())?;
+
+        // Check required fields
+        for required_field in &schema.required {
+            if !obj.contains_key(required_field) {
+                return Err(format!("Missing required field: {}", required_field));
+            }
+        }
+
+        // Validate property types
+        for (prop_name, prop_schema) in &schema.properties {
+            if let Some(value) = obj.get(prop_name) {
+                validate_property_type(value, prop_schema)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate a property value against its schema
+fn validate_property_type(value: &serde_json::Value, schema: &crate::config::PropertySchema) -> Result<(), String> {
+    match schema.prop_type.as_str() {
+        "string" => {
+            if !value.is_string() {
+                return Err(format!("Expected string, got {:?}", value));
+            }
+        }
+        "number" => {
+            if !value.is_number() {
+                return Err(format!("Expected number, got {:?}", value));
+            }
+        }
+        "boolean" => {
+            if !value.is_boolean() {
+                return Err(format!("Expected boolean, got {:?}", value));
+            }
+        }
+        "array" => {
+            let arr = value.as_array()
+                .ok_or_else(|| format!("Expected array, got {:?}", value))?;
+
+            // If items schema is present, validate each item
+            if let Some(ref items_schema) = schema.items {
+                for item in arr {
+                    validate_property_type(item, items_schema)?;
+                }
+            }
+        }
+        "object" => {
+            if !value.is_object() {
+                return Err(format!("Expected object, got {:?}", value));
+            }
+        }
+        _ => {
+            return Err(format!("Unknown type: {}", schema.prop_type));
+        }
+    }
+    Ok(())
 }
 
 /// Execute an apply step
@@ -345,6 +474,135 @@ async fn execute_apply_step(
             backends: vec!["apply".into()],
         })
     }
+}
+
+/// Execute a store step - saves discovered data to memory database
+async fn execute_store_step(
+    step: &StepConfig,
+    ctx: &ExecutionContext,
+    template_ctx: &TemplateContext,
+) -> Result<StepResult, StepExecutionError> {
+    let start = Instant::now();
+
+    // Get the input data (from previous step's output)
+    let input = step
+        .prompt
+        .as_ref()
+        .ok_or_else(|| StepExecutionError::MissingField {
+            step: step.name.clone(),
+            field: "prompt".into(),
+        })?;
+
+    // Render template to get the actual JSON data
+    let json_data = ctx.template_engine.render(input, template_ctx)?;
+
+    // Get ecosystem name from context
+    let ecosystem_name = template_ctx
+        .ecosystem
+        .as_ref()
+        .map(|e| e.name.clone())
+        .ok_or_else(|| StepExecutionError::MissingField {
+            step: step.name.clone(),
+            field: "ecosystem".into(),
+        })?;
+
+    // Parse and store the data
+    let result = store_json_data(&ecosystem_name, &json_data);
+
+    let (summary, failed, error) = match result {
+        Ok(msg) => (msg, false, None),
+        Err(e) => (
+            format!("Failed to store data: {}", e),
+            true,
+            Some(format!("{}", e)),
+        ),
+    };
+
+    Ok(StepResult {
+        output: Some(summary),
+        outputs: std::collections::HashMap::new(),
+        failed,
+        error,
+        duration_ms: start.elapsed().as_millis() as u64,
+        backend: Some("store".into()),
+        backends: vec!["store".into()],
+    })
+}
+
+/// Parse JSON output from LLM and store in SQLite memory database
+fn store_json_data(ecosystem: &str, json_data: &str) -> Result<String, anyhow::Error> {
+    use crate::memory::{EcosystemMemory, Fact, ProjectRelationship};
+
+    // Parse JSON
+    let parsed: serde_json::Value = serde_json::from_str(json_data)?;
+
+    // Open memory database
+    let db_path = EcosystemMemory::default_path(ecosystem)?;
+    let mut memory = EcosystemMemory::open(&db_path)?;
+
+    let mut facts_stored = 0;
+    let mut relationships_stored = 0;
+
+    // Store facts if present
+    if let Some(facts_array) = parsed.get("facts").and_then(|v| v.as_array()) {
+        for fact_json in facts_array {
+            if let (Some(project), Some(fact_text), Some(source), Some(confidence)) = (
+                fact_json.get("project").and_then(|v| v.as_str()),
+                fact_json.get("fact").and_then(|v| v.as_str()),
+                fact_json.get("source").and_then(|v| v.as_str()),
+                fact_json.get("confidence").and_then(|v| v.as_f64()),
+            ) {
+                let fact = Fact {
+                    id: None,
+                    ecosystem: ecosystem.to_string(),
+                    fact: format!("{}: {}", project, fact_text),
+                    source: source.to_string(),
+                    confidence,
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                };
+
+                memory.add_fact(&fact)?;
+                facts_stored += 1;
+            }
+        }
+    }
+
+    // Store relationships if present
+    if let Some(relationships_array) = parsed.get("relationships").and_then(|v| v.as_array()) {
+        for rel_json in relationships_array {
+            if let (Some(from), Some(to), Some(rel_type)) = (
+                rel_json.get("from").and_then(|v| v.as_str()),
+                rel_json.get("to").and_then(|v| v.as_str()),
+                rel_json.get("type").and_then(|v| v.as_str()),
+            ) {
+                let evidence = rel_json
+                    .get("evidence")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                let rel = ProjectRelationship {
+                    id: None,
+                    ecosystem: ecosystem.to_string(),
+                    from_project: from.to_string(),
+                    to_project: to.to_string(),
+                    relationship_type: rel_type.to_string(),
+                    metadata: evidence.map(|e| format!(r#"{{"evidence":"{}"}}"#, e)),
+                    created_at: String::new(),
+                };
+
+                memory.add_relationship(&rel)?;
+                relationships_stored += 1;
+            }
+        }
+    }
+
+    Ok(format!(
+        "Stored {} facts and {} relationships in {}",
+        facts_stored,
+        relationships_stored,
+        db_path.display()
+    ))
 }
 
 #[cfg(test)]
