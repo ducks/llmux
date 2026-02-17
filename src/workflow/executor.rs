@@ -332,10 +332,34 @@ async fn execute_query_step(
     Ok(step_result)
 }
 
+/// Strip markdown code fences from output if present
+fn strip_markdown_fences(output: &str) -> &str {
+    let trimmed = output.trim();
+
+    // Check for ```json or ``` at start
+    if trimmed.starts_with("```json") {
+        // Find the closing ```
+        if let Some(end_pos) = trimmed[7..].find("```") {
+            return trimmed[7..7 + end_pos].trim();
+        }
+    } else if trimmed.starts_with("```") {
+        // Generic code fence without language
+        if let Some(end_pos) = trimmed[3..].find("```") {
+            return trimmed[3..3 + end_pos].trim();
+        }
+    }
+
+    // No fences found, return as-is
+    trimmed
+}
+
 /// Validate JSON output against a schema
 fn validate_json_schema(output: &str, schema: &crate::config::OutputSchema) -> Result<(), String> {
+    // Strip markdown code fences if present
+    let clean_output = strip_markdown_fences(output);
+
     // Parse the output as JSON
-    let json: serde_json::Value = serde_json::from_str(output)
+    let json: serde_json::Value = serde_json::from_str(clean_output)
         .map_err(|e| format!("Invalid JSON: {}", e))?;
 
     // Check that it's an object if schema_type is "object"
