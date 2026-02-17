@@ -9,6 +9,7 @@ pkgs.mkShell {
     rustfmt
     pkg-config
     openssl
+    sqlite
 
     # For LLM CLI backends
     pkgs.nodejs_22

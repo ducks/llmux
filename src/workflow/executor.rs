@@ -336,16 +336,19 @@ async fn execute_query_step(
 fn strip_markdown_fences(output: &str) -> &str {
     let trimmed = output.trim();
 
-    // Check for ```json or ``` at start
-    if trimmed.starts_with("```json") {
-        // Find the closing ```
-        if let Some(end_pos) = trimmed[7..].find("```") {
-            return trimmed[7..7 + end_pos].trim();
+    // Look for ```json fence anywhere in the output
+    if let Some(start_pos) = trimmed.find("```json") {
+        // Find the closing ``` after the opening fence
+        if let Some(end_pos) = trimmed[start_pos + 7..].find("```") {
+            return trimmed[start_pos + 7..start_pos + 7 + end_pos].trim();
         }
-    } else if trimmed.starts_with("```") {
-        // Generic code fence without language
-        if let Some(end_pos) = trimmed[3..].find("```") {
-            return trimmed[3..3 + end_pos].trim();
+    }
+
+    // Look for generic ``` fence anywhere in the output
+    if let Some(start_pos) = trimmed.find("```") {
+        // Find the closing ``` after the opening fence
+        if let Some(end_pos) = trimmed[start_pos + 3..].find("```") {
+            return trimmed[start_pos + 3..start_pos + 3 + end_pos].trim();
         }
     }
 
@@ -518,7 +521,10 @@ async fn execute_store_step(
         })?;
 
     // Render template to get the actual JSON data
-    let json_data = ctx.template_engine.render(input, template_ctx)?;
+    let rendered_data = ctx.template_engine.render(input, template_ctx)?;
+
+    // Strip markdown fences if present
+    let json_data = strip_markdown_fences(&rendered_data).to_string();
 
     // Get ecosystem name from context
     let ecosystem_name = template_ctx
