@@ -3,6 +3,7 @@ mod backend_executor;
 mod cli;
 mod config;
 mod discovery;
+mod logging;
 mod memory;
 mod process;
 mod role;
@@ -125,6 +126,28 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Initialize logging first
+    let log_file = if cli.debug {
+        // Auto-generate log file path when debug is enabled
+        Some(logging::default_log_path("llm-mux")?)
+    } else {
+        cli.output_file.as_ref().and_then(|path| {
+            if path.extension().map_or(false, |ext| ext == "log") {
+                Some(path.clone())
+            } else {
+                None
+            }
+        })
+    };
+
+    if let Some(ref log_path) = log_file {
+        if cli.debug {
+            eprintln!("Debug logging to: {}", log_path.display());
+        }
+    }
+
+    logging::init_logging(cli.debug, cli.quiet, log_file)?;
 
     // Determine output mode
     let output_mode = if cli.quiet {

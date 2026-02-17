@@ -77,10 +77,17 @@ pub async fn execute_step(
 ) -> Result<StepResult, StepExecutionError> {
     let start = Instant::now();
 
+    tracing::info!(
+        step = %step.name,
+        step_type = ?step.step_type,
+        "Executing step"
+    );
+
     // Check condition
     if let Some(ref condition) = step.condition {
         let should_run = evaluate_condition(condition, template_ctx)?;
         if !should_run {
+            tracing::info!(step = %step.name, "Step skipped: condition evaluated to false");
             return Ok(StepResult {
                 output: None,
                 outputs: std::collections::HashMap::new(),
@@ -93,7 +100,7 @@ pub async fn execute_step(
         }
     }
 
-    match step.step_type {
+    let result = match step.step_type {
         StepType::Shell => execute_shell_step(step, ctx, template_ctx, working_dir).await,
         StepType::Query => execute_query_step(step, ctx, template_ctx, team).await,
         StepType::Apply => execute_apply_step(step, ctx, template_ctx, working_dir).await,
@@ -109,7 +116,36 @@ pub async fn execute_step(
                 backends: Vec::new(),
             })
         }
+    };
+
+    match &result {
+        Ok(step_result) => {
+            if step_result.failed {
+                tracing::error!(
+                    step = %step.name,
+                    error = ?step_result.error,
+                    duration_ms = step_result.duration_ms,
+                    "Step failed"
+                );
+            } else {
+                tracing::info!(
+                    step = %step.name,
+                    duration_ms = step_result.duration_ms,
+                    backend = ?step_result.backend,
+                    "Step completed"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::error!(
+                step = %step.name,
+                error = %e,
+                "Step execution error"
+            );
+        }
     }
+
+    result
 }
 
 /// Execute a shell step
