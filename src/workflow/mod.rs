@@ -25,8 +25,10 @@
 //! }
 //! ```
 
+mod ecosystem_detector;
 mod executor;
 mod runner;
 mod state;
 
+pub use ecosystem_detector::detect_ecosystem;
 pub use runner::WorkflowRunner;

@@ -136,6 +136,59 @@ verify = "cargo clippy && cargo test"
 backends = ["claude", "codex"]  # override for Rust projects
 ```
 
+### Ecosystems
+
+Track relationships between projects and store ecosystem knowledge:
+
+```toml
+[ecosystems.myapp]
+description = "MyApp web application and services"
+knowledge = [
+    "API uses JWT tokens with 1 hour expiration",
+    "Database migrations run automatically on deploy",
+    "Redis cache invalidation happens via pub/sub"
+]
+
+[ecosystems.myapp.projects.frontend]
+path = "~/projects/myapp-frontend"
+type = "javascript"
+depends_on = ["api"]
+tags = ["production", "web"]
+
+[ecosystems.myapp.projects.api]
+description = "REST API backend"
+path = "~/projects/myapp-api"
+type = "rust"
+depends_on = ["database"]
+tags = ["production", "backend"]
+
+[ecosystems.myapp.projects.database]
+description = "PostgreSQL database with migrations"
+path = "~/projects/myapp-db"
+type = "sql"
+tags = ["infrastructure", "database"]
+
+[ecosystems.myapp.projects.worker]
+description = "Background job processor"
+path = "~/projects/myapp-worker"
+type = "rust"
+depends_on = ["database", "api"]
+tags = ["production", "background"]
+```
+
+Workflows automatically detect which ecosystem you're in and can access:
+
+```jinja2
+{{ ecosystem.name }}                    - Ecosystem name
+{{ ecosystem.description }}             - Description
+{{ ecosystem.knowledge }}               - Array of facts
+{{ ecosystem.projects }}                - All projects
+{{ ecosystem.current_project.name }}    - Current project name
+{{ ecosystem.current_project.type }}    - Project type
+{{ ecosystem.current_project.depends_on }} - Dependencies
+{{ ecosystem.current_project.tags }}    - Project tags
+```
+
 ## Workflows
 
 ### Step Types
@@ -172,6 +225,9 @@ depends_on = ["analyze"]
 - `{{ steps.name.output }}`: previous step output
 - `{{ env.VAR }}`: environment variables
 - `{{ team }}`: detected team name
+- `{{ ecosystem.name }}`: detected ecosystem
+- `{{ ecosystem.knowledge }}`: ecosystem facts
+- `{{ ecosystem.current_project }}`: current project info
 
 ### Filters
 
@@ -213,6 +269,7 @@ llm-mux doctor                     Check backend availability
 llm-mux backends                   List configured backends
 llm-mux teams                      List configured teams
 llm-mux roles                      List configured roles
+llm-mux ecosystems                 List configured ecosystems
 
 Options:
   --team <name>      Override team detection
@@ -287,6 +344,35 @@ source = "steps.fix"
 verify = "cargo test"
 verify_retries = 2
 depends_on = ["fix"]
+```
+
+### Ecosystem-Aware Bug Hunt
+
+```toml
+name = "bug-hunt"
+description = "Search for bugs across ecosystem"
+
+[[steps]]
+name = "analyze"
+type = "query"
+role = "analyzer"
+prompt = """
+Search for potential bugs in {{ ecosystem.current_project.name }}.
+
+Project type: {{ ecosystem.current_project.type }}
+
+Known ecosystem facts:
+{% for fact in ecosystem.knowledge %}
+- {{ fact }}
+{% endfor %}
+
+Dependencies to consider:
+{% for dep in ecosystem.current_project.depends_on %}
+- {{ dep }}
+{% endfor %}
+
+Focus on common issues for {{ ecosystem.current_project.type }} projects.
+"""
 ```
 
 ## Contributing

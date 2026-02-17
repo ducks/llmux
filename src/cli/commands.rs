@@ -167,8 +167,9 @@ pub async fn run_workflow(
         if let Some(output) = final_output {
             // Create parent directories if they don't exist
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create directory {}: {}", parent.display(), e))?;
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    format!("Failed to create directory {}: {}", parent.display(), e)
+                })?;
             }
             std::fs::write(path, output)
                 .map_err(|e| format!("Failed to write output to {}: {}", path.display(), e))?;
@@ -370,6 +371,47 @@ pub fn list_roles(config: &LlmuxConfig, handler: &dyn OutputHandler) {
     }
 }
 
+/// List configured ecosystems
+pub fn list_ecosystems(config: &LlmuxConfig, handler: &dyn OutputHandler) {
+    if config.ecosystems.is_empty() {
+        handler.emit(OutputEvent::Info {
+            message: "(no ecosystems configured)".into(),
+        });
+        return;
+    }
+
+    for (name, ecosystem) in &config.ecosystems {
+        handler.emit(OutputEvent::Info {
+            message: name.to_string(),
+        });
+        if !ecosystem.description.is_empty() {
+            handler.emit(OutputEvent::Info {
+                message: format!("  {}", ecosystem.description),
+            });
+        }
+        if !ecosystem.projects.is_empty() {
+            handler.emit(OutputEvent::Info {
+                message: format!("  projects: {} configured", ecosystem.projects.len()),
+            });
+            for (project_name, project) in &ecosystem.projects {
+                handler.emit(OutputEvent::Info {
+                    message: format!("    {} -> {}", project_name, project.path.display()),
+                });
+                if !project.depends_on.is_empty() {
+                    handler.emit(OutputEvent::Info {
+                        message: format!("      depends_on: {:?}", project.depends_on),
+                    });
+                }
+            }
+        }
+        if !ecosystem.knowledge.is_empty() {
+            handler.emit(OutputEvent::Info {
+                message: format!("  knowledge: {} facts", ecosystem.knowledge.len()),
+            });
+        }
+    }
+}
+
 /// Initialize llmux configuration interactively
 pub async fn init_config(
     working_dir: &Path,
@@ -392,7 +434,8 @@ pub async fn init_config(
             message: "Initialize configuration:".into(),
         });
         handler.emit(OutputEvent::Info {
-            message: "  1. Global (~/.config/llm-mux/config.toml) - backends for all projects".into(),
+            message: "  1. Global (~/.config/llm-mux/config.toml) - backends for all projects"
+                .into(),
         });
         handler.emit(OutputEvent::Info {
             message: "  2. Project (.llm-mux/config.toml) - roles/teams for this project".into(),
@@ -556,7 +599,8 @@ pub async fn init_config(
                 config_content.push_str("[backends.gemini]\n");
                 config_content.push_str("enabled = true\n");
                 config_content.push_str("command = \"npx\"\n");
-                config_content.push_str("args = [\"@google/gemini-cli\", \"-m\", \"gemini-2.0-flash\"]\n");
+                config_content
+                    .push_str("args = [\"@google/gemini-cli\", \"-m\", \"gemini-2.0-flash\"]\n");
                 config_content.push_str("timeout = 300\n\n");
             }
             "ollama" => {

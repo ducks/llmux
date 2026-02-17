@@ -1,5 +1,6 @@
 //! Workflow runner - orchestrates step execution
 
+use super::detect_ecosystem;
 use super::executor::{ExecutionContext, StepExecutionError, execute_step};
 use super::state::{WorkflowResult, WorkflowState};
 use crate::backend_executor::output_parser::extract_json;
@@ -56,12 +57,25 @@ impl WorkflowRunner {
         // Detect team
         let team = detect_team(working_dir, &self.config.teams, team_override);
 
+        // Detect ecosystem
+        let ecosystem = detect_ecosystem(working_dir, &self.config.ecosystems);
+
         // Create state
         let mut state = WorkflowState::new(workflow.clone(), args, working_dir.to_path_buf());
 
         if let Some(ref team_name) = team {
             if let Some(team_config) = self.config.teams.get(team_name) {
                 state = state.with_team(team_name.clone(), team_config.clone());
+            }
+        }
+
+        if let Some((ecosystem_name, project_name)) = ecosystem {
+            if let Some(ecosystem_config) = self.config.ecosystems.get(&ecosystem_name) {
+                state = state.with_ecosystem(
+                    ecosystem_name.clone(),
+                    ecosystem_config.clone(),
+                    Some(project_name),
+                );
             }
         }
 

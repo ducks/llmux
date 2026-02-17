@@ -2,7 +2,7 @@
 
 //! Workflow execution state
 
-use crate::config::{StepResult, TeamConfig, WorkflowConfig};
+use crate::config::{EcosystemConfig, StepResult, TeamConfig, WorkflowConfig};
 use crate::template::TemplateContext;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,6 +22,15 @@ pub struct WorkflowState {
 
     /// Team configuration
     pub team_config: Option<TeamConfig>,
+
+    /// Detected ecosystem
+    pub ecosystem: Option<String>,
+
+    /// Ecosystem configuration
+    pub ecosystem_config: Option<EcosystemConfig>,
+
+    /// Current project within ecosystem
+    pub current_project: Option<String>,
 
     /// Working directory
     pub working_dir: PathBuf,
@@ -51,6 +60,9 @@ impl WorkflowState {
             args,
             team: None,
             team_config: None,
+            ecosystem: None,
+            ecosystem_config: None,
+            current_project: None,
             working_dir,
             step_results: HashMap::new(),
             started_at: Instant::now(),
@@ -63,6 +75,14 @@ impl WorkflowState {
     pub fn with_team(mut self, team: String, config: TeamConfig) -> Self {
         self.team = Some(team);
         self.team_config = Some(config);
+        self
+    }
+
+    /// Set the ecosystem for this workflow
+    pub fn with_ecosystem(mut self, ecosystem: String, config: EcosystemConfig, current_project: Option<String>) -> Self {
+        self.ecosystem = Some(ecosystem);
+        self.ecosystem_config = Some(config);
+        self.current_project = current_project;
         self
     }
 
@@ -108,6 +128,17 @@ impl WorkflowState {
         // Add team config if present
         if let Some(ref team_config) = self.team_config {
             ctx.set_team(team_config.clone());
+        }
+
+        // Add ecosystem config if present
+        if let Some(ref ecosystem_name) = self.ecosystem {
+            if let Some(ref ecosystem_config) = self.ecosystem_config {
+                ctx.set_ecosystem(
+                    ecosystem_name.clone(),
+                    ecosystem_config.clone(),
+                    self.current_project.clone(),
+                );
+            }
         }
 
         // Add workflow name

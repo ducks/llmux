@@ -1,0 +1,37 @@
+# Example ecosystem configuration for Discourse development
+
+[ecosystems.discourse]
+description = "Discourse forum platform and infrastructure"
+knowledge = [
+    "postgres-manager alerts when unused databases exist",
+    "flex clusters are production, yyz is test",
+    "Discourse uses Rails 7 and Ember.js for the frontend",
+    "Message bus handles real-time updates",
+    "Use find_each instead of all.each for large datasets"
+]
+
+[ecosystems.discourse.projects.discourse]
+path = "~/discourse/discourse"
+type = "ruby"
+depends_on = ["mothership", "docker-hosting"]
+tags = ["production", "web", "rails"]
+description = "Core Discourse application"
+
+[ecosystems.discourse.projects.mothership]
+description = "Discourse hosting management platform"
+path = "~/discourse/mothership"
+type = "ruby"
+depends_on = ["docker-postgres"]
+tags = ["production", "infrastructure", "rails"]
+
+[ecosystems.discourse.projects.docker-postgres]
+description = "PostgreSQL management for Docker containers"
+path = "~/discourse/docker-postgres"
+type = "ruby"
+tags = ["infrastructure", "database"]
+
+[ecosystems.discourse.projects.docker-hosting]
+description = "Docker hosting infrastructure"
+path = "~/discourse/docker-hosting"
+type = "ruby"
+tags = ["infrastructure", "hosting"]
