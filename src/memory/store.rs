@@ -1,5 +1,7 @@
 //! Ecosystem memory store
 
+#![allow(dead_code)]
+
 use super::schema::init_schema;
 use anyhow::{Context, Result};
 use rusqlite::Connection;
@@ -75,12 +77,15 @@ impl EcosystemMemory {
 
     /// Get the default memory database path for an ecosystem
     pub fn default_path(ecosystem: &str) -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Could not determine config directory")?;
+        let config_dir = dirs::config_dir().context("Could not determine config directory")?;
 
         let memory_dir = config_dir.join("llm-mux").join("memory");
-        std::fs::create_dir_all(&memory_dir)
-            .with_context(|| format!("Failed to create memory directory at {}", memory_dir.display()))?;
+        std::fs::create_dir_all(&memory_dir).with_context(|| {
+            format!(
+                "Failed to create memory directory at {}",
+                memory_dir.display()
+            )
+        })?;
 
         Ok(memory_dir.join(format!("{}.db", ecosystem)))
     }
@@ -114,21 +119,22 @@ impl EcosystemMemory {
             "SELECT id, ecosystem, fact, source, confidence, created_at, updated_at
              FROM facts
              WHERE ecosystem = ?1
-             ORDER BY confidence DESC, created_at DESC"
+             ORDER BY confidence DESC, created_at DESC",
         )?;
 
-        let facts = stmt.query_map([ecosystem], |row| {
-            Ok(Fact {
-                id: Some(row.get(0)?),
-                ecosystem: row.get(1)?,
-                fact: row.get(2)?,
-                source: row.get(3)?,
-                confidence: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let facts = stmt
+            .query_map([ecosystem], |row| {
+                Ok(Fact {
+                    id: Some(row.get(0)?),
+                    ecosystem: row.get(1)?,
+                    fact: row.get(2)?,
+                    source: row.get(3)?,
+                    confidence: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(facts)
     }
@@ -155,7 +161,11 @@ impl EcosystemMemory {
     }
 
     /// Get relationships for a project
-    pub fn get_relationships(&self, ecosystem: &str, project: Option<&str>) -> Result<Vec<ProjectRelationship>> {
+    pub fn get_relationships(
+        &self,
+        ecosystem: &str,
+        project: Option<&str>,
+    ) -> Result<Vec<ProjectRelationship>> {
         let query = if project.is_some() {
             "SELECT id, ecosystem, from_project, to_project, relationship_type, metadata, created_at
              FROM project_relationships
@@ -226,7 +236,12 @@ impl EcosystemMemory {
     }
 
     /// Get findings for an ecosystem or project
-    pub fn get_findings(&self, ecosystem: &str, project: Option<&str>, status: Option<&str>) -> Result<Vec<Finding>> {
+    pub fn get_findings(
+        &self,
+        ecosystem: &str,
+        project: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<Vec<Finding>> {
         let query = match (project, status) {
             (Some(_), Some(_)) => {
                 "SELECT id, ecosystem, project, category, severity, description, location, workflow_run_id, status, created_at, updated_at
@@ -273,22 +288,18 @@ impl EcosystemMemory {
         };
 
         let findings: Vec<Finding> = match (project, status) {
-            (Some(p), Some(s)) => {
-                stmt.query_map([ecosystem, p, s], row_mapper)?
-                    .collect::<Result<Vec<_>, _>>()?
-            }
-            (Some(p), None) => {
-                stmt.query_map([ecosystem, p], row_mapper)?
-                    .collect::<Result<Vec<_>, _>>()?
-            }
-            (None, Some(s)) => {
-                stmt.query_map([ecosystem, s], row_mapper)?
-                    .collect::<Result<Vec<_>, _>>()?
-            }
-            (None, None) => {
-                stmt.query_map([ecosystem], row_mapper)?
-                    .collect::<Result<Vec<_>, _>>()?
-            }
+            (Some(p), Some(s)) => stmt
+                .query_map([ecosystem, p, s], row_mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (Some(p), None) => stmt
+                .query_map([ecosystem, p], row_mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, Some(s)) => stmt
+                .query_map([ecosystem, s], row_mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, None) => stmt
+                .query_map([ecosystem], row_mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
         };
 
         Ok(findings)
@@ -321,21 +332,22 @@ impl EcosystemMemory {
              FROM workflow_runs
              WHERE ecosystem = ?1
              ORDER BY created_at DESC
-             LIMIT ?2"
+             LIMIT ?2",
         )?;
 
-        let runs = stmt.query_map([ecosystem, &limit.to_string()], |row| {
-            Ok(WorkflowRun {
-                id: Some(row.get(0)?),
-                ecosystem: row.get(1)?,
-                project: row.get(2)?,
-                workflow_name: row.get(3)?,
-                success: row.get(4)?,
-                duration_ms: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let runs = stmt
+            .query_map([ecosystem, &limit.to_string()], |row| {
+                Ok(WorkflowRun {
+                    id: Some(row.get(0)?),
+                    ecosystem: row.get(1)?,
+                    project: row.get(2)?,
+                    workflow_name: row.get(3)?,
+                    success: row.get(4)?,
+                    duration_ms: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(runs)
     }

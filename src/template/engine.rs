@@ -240,8 +240,10 @@ mod tests {
     fn test_for_loop_in_template() {
         let engine = TemplateEngine::new();
         let mut ctx = TemplateContext::new();
-        let mut result = StepResult::default();
-        result.backends = vec!["claude".into(), "codex".into()];
+        let result = StepResult {
+            backends: vec!["claude".into(), "codex".into()],
+            ..Default::default()
+        };
         ctx.add_step("query", result);
 
         let template = "{% for b in steps.query.backends %}{{ b }},{% endfor %}";

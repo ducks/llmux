@@ -1,9 +1,10 @@
 //! Database schema for ecosystem memory
 
-use rusqlite::Connection;
 use anyhow::Result;
+use rusqlite::Connection;
 
 /// Initialize the database schema
+#[allow(dead_code)]
 pub fn init_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
