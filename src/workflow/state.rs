@@ -79,7 +79,12 @@ impl WorkflowState {
     }
 
     /// Set the ecosystem for this workflow
-    pub fn with_ecosystem(mut self, ecosystem: String, config: EcosystemConfig, current_project: Option<String>) -> Self {
+    pub fn with_ecosystem(
+        mut self,
+        ecosystem: String,
+        config: EcosystemConfig,
+        current_project: Option<String>,
+    ) -> Self {
         self.ecosystem = Some(ecosystem);
         self.ecosystem_config = Some(config);
         self.current_project = current_project;

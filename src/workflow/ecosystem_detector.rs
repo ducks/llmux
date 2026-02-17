@@ -60,8 +60,10 @@ mod tests {
             },
         );
 
-        let mut config = EcosystemConfig::default();
-        config.projects = projects;
+        let config = EcosystemConfig {
+            projects,
+            ..Default::default()
+        };
         ecosystems.insert("test".to_string(), config);
 
         let result = detect_ecosystem(&project_dir, &ecosystems);
@@ -88,8 +90,10 @@ mod tests {
             },
         );
 
-        let mut config = EcosystemConfig::default();
-        config.projects = projects;
+        let config = EcosystemConfig {
+            projects,
+            ..Default::default()
+        };
         ecosystems.insert("test".to_string(), config);
 
         let result = detect_ecosystem(&subdir, &ecosystems);

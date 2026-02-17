@@ -86,7 +86,12 @@ impl TemplateContext {
     }
 
     /// Set the ecosystem context
-    pub fn set_ecosystem(&mut self, name: impl Into<String>, config: EcosystemConfig, current_project: Option<String>) {
+    pub fn set_ecosystem(
+        &mut self,
+        name: impl Into<String>,
+        config: EcosystemConfig,
+        current_project: Option<String>,
+    ) {
         self.ecosystem = Some(EcosystemContext {
             name: name.into(),
             config,
@@ -151,7 +156,15 @@ impl Object for ContextObject {
     }
 
     fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
-        minijinja::value::Enumerator::Str(&["steps", "args", "team", "ecosystem", "item", "workflow", "env"])
+        minijinja::value::Enumerator::Str(&[
+            "steps",
+            "args",
+            "team",
+            "ecosystem",
+            "item",
+            "workflow",
+            "env",
+        ])
     }
 }
 
@@ -350,7 +363,9 @@ impl Object for EcosystemObject {
                         if !project.description.is_empty() {
                             map.insert("description", Value::from(project.description.clone()));
                         }
-                        Some(Value::from_iter(map.into_iter().map(|(k, v)| (Value::from(k), v))))
+                        Some(Value::from_iter(
+                            map.into_iter().map(|(k, v)| (Value::from(k), v)),
+                        ))
                     } else {
                         None
                     }
@@ -363,7 +378,13 @@ impl Object for EcosystemObject {
     }
 
     fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
-        minijinja::value::Enumerator::Str(&["name", "description", "knowledge", "projects", "current_project"])
+        minijinja::value::Enumerator::Str(&[
+            "name",
+            "description",
+            "knowledge",
+            "projects",
+            "current_project",
+        ])
     }
 }
 
