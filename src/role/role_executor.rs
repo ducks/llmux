@@ -2,7 +2,7 @@
 
 //! Execute roles across backends with different execution modes
 
-use crate::backend_executor::{BackendExecutor, BackendRequest, create_executor};
+use crate::backend_executor::{BackendExecutor, BackendRequest, create_executor_with_retry};
 use crate::config::{LlmuxConfig, RoleExecution, StepResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -115,7 +115,7 @@ impl RoleExecutor {
                     continue;
                 }
 
-                let executor = create_executor(backend_name, backend_config);
+                let executor = create_executor_with_retry(backend_name, backend_config);
 
                 match executor.execute(request).await {
                     Ok(response) => {
@@ -170,7 +170,7 @@ impl RoleExecutor {
                     continue;
                 }
 
-                let executor = create_executor(backend_name, backend_config);
+                let executor = create_executor_with_retry(backend_name, backend_config);
                 let request = request.clone();
                 let name = backend_name.clone();
 

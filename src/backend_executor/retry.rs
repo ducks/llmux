@@ -1,6 +1,3 @@
-// TODO: Use RetryExecutor in workflow runner
-#![allow(dead_code)]
-
 //! Retry wrapper with exponential backoff
 
 use super::types::{BackendError, BackendExecutor, BackendRequest, BackendResponse, RetryPolicy};
@@ -23,6 +20,7 @@ impl<T: BackendExecutor> RetryExecutor<T> {
     }
 
     /// Create with default retry policy
+    #[allow(dead_code)]
     pub fn with_defaults(inner: T) -> Self {
         Self::new(inner, RetryPolicy::default())
     }
@@ -82,6 +80,7 @@ pub fn with_retry<T: BackendExecutor + 'static>(
 }
 
 /// Create a retry executor with default policy
+#[allow(dead_code)]
 pub fn with_default_retry<T: BackendExecutor + 'static>(backend: T) -> RetryExecutor<T> {
     RetryExecutor::with_defaults(backend)
 }
