@@ -58,7 +58,6 @@ pub fn create_executor(name: &str, config: &BackendConfig) -> Box<dyn BackendExe
 }
 
 /// Create an executor with retry logic
-#[allow(dead_code)]
 pub fn create_executor_with_retry(
     name: &str,
     config: &BackendConfig,
