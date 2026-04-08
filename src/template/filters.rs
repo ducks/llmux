@@ -16,34 +16,37 @@ pub fn register_filters(env: &mut minijinja::Environment) {
     env.add_filter("strftime", filter_strftime);
 }
 
-/// Escape a string for safe shell interpolation
+/// Shell-escape a string value, always wrapping in single quotes.
 ///
 /// Uses single quotes and escapes any embedded single quotes.
 /// Example: `hello 'world'` becomes `'hello '\''world'\''`
-fn filter_shell_escape(_state: &State, value: Value) -> Result<Value, Error> {
-    let s = value.to_string();
-
-    // If string contains no special characters, return as-is in quotes
-    if s.chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/')
-    {
-        return Ok(Value::from(s));
+/// Empty strings become `''`.
+pub fn shell_escape_str(s: &str) -> String {
+    if s.is_empty() {
+        return "''".to_string();
     }
 
-    // Escape using single quotes, handling embedded single quotes
     let mut escaped = String::with_capacity(s.len() + 10);
     escaped.push('\'');
     for c in s.chars() {
         if c == '\'' {
-            // End quote, add escaped quote, start new quote
             escaped.push_str("'\\''");
         } else {
             escaped.push(c);
         }
     }
     escaped.push('\'');
+    escaped
+}
 
-    Ok(Value::from(escaped))
+/// Shell-escape a minijinja Value (used by auto-escape formatter).
+pub fn shell_escape_value(_state: &State, value: Value) -> Result<Value, Error> {
+    Ok(Value::from(shell_escape_str(&value.to_string())))
+}
+
+/// Filter: escape a string for safe shell interpolation.
+fn filter_shell_escape(_state: &State, value: Value) -> Result<Value, Error> {
+    Ok(Value::from(shell_escape_str(&value.to_string())))
 }
 
 /// Serialize value to JSON string
@@ -186,7 +189,7 @@ mod tests {
             "{{ value | shell_escape }}",
             minijinja::context! { value => "hello" },
         );
-        assert_eq!(result, "hello");
+        assert_eq!(result, "'hello'");
     }
 
     #[test]

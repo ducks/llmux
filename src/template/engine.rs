@@ -47,8 +47,46 @@ impl TemplateEngine {
     /// assert_eq!(result, "Fixing issue 123");
     /// ```
     pub fn render(&self, template: &str, ctx: &TemplateContext) -> Result<String, TemplateError> {
-        // Add the template to the environment
+        self.render_inner(template, ctx, false)
+    }
+
+    /// Render a template for use in a shell command.
+    ///
+    /// All interpolated values are automatically shell-escaped using single
+    /// quotes. This prevents injection when the rendered string is passed
+    /// to `sh -c`. Values that already use `| shell_escape` are safe — the
+    /// auto-escape is idempotent on already-quoted strings.
+    pub fn render_shell(
+        &self,
+        template: &str,
+        ctx: &TemplateContext,
+    ) -> Result<String, TemplateError> {
+        self.render_inner(template, ctx, true)
+    }
+
+    fn render_inner(
+        &self,
+        template: &str,
+        ctx: &TemplateContext,
+        shell_escape: bool,
+    ) -> Result<String, TemplateError> {
         let mut env = self.env.clone();
+
+        if shell_escape {
+            env.set_auto_escape_callback(|_| minijinja::AutoEscape::Custom("shell"));
+            env.add_function("__shell_escape_finalizer", filters::shell_escape_value);
+            // Register the escape function for the "shell" auto-escape mode
+            env.set_formatter(|out, state, value| {
+                if state.auto_escape() == minijinja::AutoEscape::Custom("shell") {
+                    let escaped = filters::shell_escape_str(&value.to_string());
+                    out.write_str(&escaped)?;
+                } else {
+                    write!(out, "{value}")?;
+                }
+                Ok(())
+            });
+        }
+
         env.add_template("__render__", template)
             .map_err(|e| TemplateError::syntax(e.to_string(), e.line().unwrap_or(0), 0))?;
 
@@ -261,6 +299,60 @@ mod tests {
             .render("{{ args.input | shell_escape }}", &ctx)
             .unwrap();
         assert_eq!(result, "'hello world'");
+    }
+
+    #[test]
+    fn test_render_shell_auto_escapes() {
+        let engine = TemplateEngine::new();
+        let mut ctx = TemplateContext::new();
+        ctx.args.insert("input".into(), "$(rm -rf /)".into());
+
+        let result = engine.render_shell("echo {{ args.input }}", &ctx).unwrap();
+        assert_eq!(result, "echo '$(rm -rf /)'");
+    }
+
+    #[test]
+    fn test_render_shell_simple_value() {
+        let engine = TemplateEngine::new();
+        let mut ctx = TemplateContext::new();
+        ctx.args.insert("name".into(), "world".into());
+
+        let result = engine.render_shell("echo {{ args.name }}", &ctx).unwrap();
+        assert_eq!(result, "echo 'world'");
+    }
+
+    #[test]
+    fn test_render_shell_quotes_in_value() {
+        let engine = TemplateEngine::new();
+        let mut ctx = TemplateContext::new();
+        ctx.args.insert("msg".into(), "it's dangerous".into());
+
+        let result = engine.render_shell("echo {{ args.msg }}", &ctx).unwrap();
+        assert_eq!(result, "echo 'it'\\''s dangerous'");
+    }
+
+    #[test]
+    fn test_render_shell_literal_text_not_escaped() {
+        let engine = TemplateEngine::new();
+        let ctx = TemplateContext::new();
+
+        let result = engine
+            .render_shell("echo hello | grep hello", &ctx)
+            .unwrap();
+        assert_eq!(result, "echo hello | grep hello");
+    }
+
+    #[test]
+    fn test_render_shell_step_output() {
+        let engine = TemplateEngine::new();
+        let mut ctx = TemplateContext::new();
+        let result = StepResult::success("malicious; rm -rf /".into(), "claude".into(), 1000);
+        ctx.add_step("prev", result);
+
+        let rendered = engine
+            .render_shell("echo {{ steps.prev.output }}", &ctx)
+            .unwrap();
+        assert_eq!(rendered, "echo 'malicious; rm -rf /'");
     }
 
     #[test]
