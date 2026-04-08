@@ -166,8 +166,9 @@ async fn execute_shell_step(
             field: "run".into(),
         })?;
 
-    // Render template variables in command
-    let rendered_command = ctx.template_engine.render(command, template_ctx)?;
+    // Render template variables in command with auto shell-escaping.
+    // All interpolated values are automatically quoted to prevent injection.
+    let rendered_command = ctx.template_engine.render_shell(command, template_ctx)?;
 
     // Execute command
     let mut child = Command::new("sh")
@@ -794,7 +795,7 @@ mod tests {
         let step = StepConfig {
             name: "test".into(),
             step_type: StepType::Shell,
-            run: Some("echo 'hello {{ args.name }}'".into()),
+            run: Some("echo hello {{ args.name }}".into()),
             ..Default::default()
         };
 
@@ -803,6 +804,7 @@ mod tests {
             .unwrap();
 
         assert!(!result.failed);
+        // Auto shell-escaping wraps the value: echo hello 'world'
         assert!(result.output.unwrap().contains("hello world"));
     }
 

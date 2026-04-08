@@ -197,7 +197,10 @@ pub async fn run_workflow(
         println!("{}", output);
 
         // ALWAYS write to a temp file so we don't lose reports
-        let report_file = format!("/tmp/llm-mux-{}-report.txt", workflow_name);
+        let report_file = std::env::temp_dir()
+            .join(format!("llm-mux-{}-report.txt", workflow_name))
+            .display()
+            .to_string();
         if let Err(e) = std::fs::write(&report_file, output) {
             eprintln!("Warning: Failed to write report to {}: {}", report_file, e);
         } else {
